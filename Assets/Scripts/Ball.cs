@@ -6,14 +6,34 @@ public class Ball : MonoBehaviour
     public float explosionRadius = 0f;
     public bool isChargedShot = false;
     
+    [Header("Boomerang Settings")]
+    public float maxDistance = 10f;
+    public float returnSpeed = 20f;
+    public bool isReturning = false;
+    
     private float lifetime;
     private bool hasExploded = false;
+    private Transform playerTransform;
+    private Vector3 startPosition;
+    private Vector3 forwardDirection;
+    private float travelDistance = 0f;
     
     public void Initialize(float ballLifetime, float chargedRadius)
     {
         lifetime = ballLifetime;
         explosionRadius = chargedRadius;
         isChargedShot = explosionRadius > 0f;
+        
+        // Find the player for return trajectory
+        GameObject player = GameObject.FindWithTag("Player");
+        if (player != null)
+        {
+            playerTransform = player.transform;
+        }
+        
+        startPosition = transform.position;
+        forwardDirection = transform.forward;
+        maxDistance = isChargedShot ? 15f : 10f;
         
         // Ensure the ball has a collider
         if (GetComponent<Collider>() == null)
@@ -46,8 +66,8 @@ public class Ball : MonoBehaviour
         ballMaterial.SetFloat("_Glossiness", 0.8f);
         meshRenderer.material = ballMaterial;
         
-        // Scale the ball
-        transform.localScale = Vector3.one * (isChargedShot ? 0.3f : 0.2f);
+        // Scale the ball - make it bigger so it's more visible
+        transform.localScale = Vector3.one * (isChargedShot ? 0.5f : 0.4f);
     }
     
     Mesh CreateSphereMesh()
@@ -57,6 +77,47 @@ public class Ball : MonoBehaviour
         Mesh sphereMesh = tempSphere.GetComponent<MeshFilter>().mesh;
         DestroyImmediate(tempSphere);
         return sphereMesh;
+    }
+    
+    void Update()
+    {
+        if (playerTransform == null) return;
+        
+        // Boomerang behavior
+        if (!isReturning)
+        {
+            // Move forward
+            transform.position += forwardDirection * ballSpeed * Time.deltaTime;
+            travelDistance += ballSpeed * Time.deltaTime;
+            
+            // Start returning when max distance reached
+            if (travelDistance >= maxDistance)
+            {
+                isReturning = true;
+            }
+        }
+        else
+        {
+            // Return to player
+            Vector3 directionToPlayer = (playerTransform.position + Vector3.up - transform.position).normalized;
+            transform.position += directionToPlayer * returnSpeed * Time.deltaTime;
+            
+            // Check if close to player
+            if (Vector3.Distance(transform.position, playerTransform.position) < 1f)
+            {
+                DestroyBall();
+            }
+        }
+        
+        // Rotate the ball for visual effect
+        transform.Rotate(Vector3.up * 360f * Time.deltaTime);
+    }
+    
+    private float ballSpeed = 15f; // Default speed
+    
+    public void SetSpeed(float speed)
+    {
+        ballSpeed = speed;
     }
     
     void OnTriggerEnter(Collider other)
@@ -69,7 +130,12 @@ public class Ball : MonoBehaviour
         }
         else if (other.CompareTag("Ground"))
         {
-            // Ball hit ground, destroy it
+            // Don't destroy on ground hit, let it return
+            // Ball will bounce off ground
+        }
+        else if (other.CompareTag("Player") && isReturning)
+        {
+            // Ball returned to player
             DestroyBall();
         }
     }

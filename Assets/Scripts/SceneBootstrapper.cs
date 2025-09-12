@@ -264,30 +264,43 @@ public class SceneBootstrapper : MonoBehaviour
     GameObject CreateBallPrefab()
     {
         GameObject ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        ball.name = "Ball";
-        ball.transform.localScale = Vector3.one * 0.3f;
+        ball.name = "BallPrefab";
+        ball.transform.localScale = Vector3.one * 0.4f; // Bigger for visibility
         ball.tag = "Ball";
         
         // Add components
         Rigidbody ballRb = ball.AddComponent<Rigidbody>();
         ballRb.useGravity = false;
+        ballRb.isKinematic = true; // Kinematic for controlled movement
         
         SphereCollider ballCol = ball.GetComponent<SphereCollider>();
         ballCol.isTrigger = true;
+        ballCol.radius = 0.5f; // Match visual size
         
-        ball.AddComponent<Ball>();
+        Ball ballScript = ball.AddComponent<Ball>();
         
-        // Set material
+        // Set material - make it bright and emissive for visibility
         Material ballMat = new Material(Shader.Find("Standard"));
-        ballMat.color = Color.cyan;
-        ballMat.SetFloat("_Metallic", 0.3f);
-        ballMat.SetFloat("_Glossiness", 0.7f);
+        ballMat.color = new Color(0f, 1f, 1f, 1f); // Bright cyan
+        ballMat.SetFloat("_Metallic", 0.7f);
+        ballMat.SetFloat("_Glossiness", 0.9f);
+        ballMat.EnableKeyword("_EMISSION");
+        ballMat.SetColor("_EmissionColor", new Color(0f, 0.5f, 0.5f)); // Slight glow
         ball.GetComponent<MeshRenderer>().material = ballMat;
+        
+        // Add trail for better visibility
+        TrailRenderer trail = ball.AddComponent<TrailRenderer>();
+        trail.time = 0.5f;
+        trail.startWidth = 0.3f;
+        trail.endWidth = 0.05f;
+        trail.material = ballMat;
+        trail.startColor = Color.cyan;
+        trail.endColor = new Color(0, 1, 1, 0);
         
         // Deactivate it initially (will be instantiated when needed)
         ball.SetActive(false);
         
-        Debug.Log("✓ Created Ball Prefab");
+        Debug.Log("✓ Created Ball Prefab with boomerang behavior");
         return ball;
     }
     

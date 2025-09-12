@@ -6,7 +6,7 @@ public class ShootingSystem : MonoBehaviour
     public GameObject ballPrefab;
     public Transform shootPoint;
     public float ballSpeed = 15f;
-    public float ballLifetime = 3f;
+    public float ballLifetime = 5f; // Increased for boomerang return
     public float chargedShotMultiplier = 2f;
     public float autoTargetRange = 10f;
     public LayerMask obstacleLayer = 1;
@@ -22,12 +22,12 @@ public class ShootingSystem : MonoBehaviour
     {
         playerTransform = transform;
         
-        // If no shoot point is assigned, create one
+        // If no shoot point is assigned, create one in front of player
         if (shootPoint == null)
         {
             GameObject shootPointObj = new GameObject("ShootPoint");
             shootPointObj.transform.SetParent(transform);
-            shootPointObj.transform.localPosition = new Vector3(0, 1f, 0.5f);
+            shootPointObj.transform.localPosition = new Vector3(0, 1f, 1f); // Further in front
             shootPoint = shootPointObj.transform;
         }
     }
@@ -41,10 +41,8 @@ public class ShootingSystem : MonoBehaviour
             return;
         }
         
-        Transform target = FindNearestObstacle();
-        Vector3 shootDirection = target != null ? 
-            (target.position - shootPoint.position).normalized : 
-            Vector3.forward;
+        // Always shoot forward relative to player's forward direction
+        Vector3 shootDirection = transform.forward;
         
         Debug.Log($"Creating ball, direction: {shootDirection}");
         CreateBall(shootDirection, ballSpeed, false);
@@ -52,26 +50,26 @@ public class ShootingSystem : MonoBehaviour
     
     public void ChargedShot()
     {
-        if (ballPrefab == null) return;
-        
-        Transform[] targets = FindMultipleObstacles();
-        
-        if (targets.Length > 0)
+        Debug.Log("ChargedShot called");
+        if (ballPrefab == null) 
         {
-            // Shoot at primary target with extra force
-            Vector3 primaryDirection = (targets[0].position - shootPoint.position).normalized;
-            CreateBall(primaryDirection, chargedShotForce, true);
+            Debug.LogError("Ball prefab is null!");
+            return;
         }
-        else
-        {
-            // Shoot forward with charged power
-            CreateBall(Vector3.forward, chargedShotForce, true);
-        }
+        
+        // Always shoot forward with charged power
+        Vector3 shootDirection = transform.forward;
+        CreateBall(shootDirection, chargedShotForce, true);
     }
     
     void CreateBall(Vector3 direction, float speed, bool isChargedShot)
     {
-        GameObject ball = Instantiate(ballPrefab, shootPoint.position, Quaternion.LookRotation(direction));
+        // Ensure ball spawns in front of player
+        Vector3 spawnPosition = transform.position + transform.forward * 1.5f + Vector3.up * 1f;
+        GameObject ball = Instantiate(ballPrefab, spawnPosition, Quaternion.LookRotation(direction));
+        
+        // Ensure ball is visible
+        ball.SetActive(true);
         
         // Add ball physics
         Rigidbody ballRb = ball.GetComponent<Rigidbody>();
@@ -80,8 +78,9 @@ public class ShootingSystem : MonoBehaviour
             ballRb = ball.AddComponent<Rigidbody>();
         }
         
-        ballRb.linearVelocity = direction * speed;
+        // Don't set velocity directly, let the Ball script handle movement
         ballRb.useGravity = false;
+        ballRb.isKinematic = true; // Kinematic for controlled movement
         
         // Add ball script
         Ball ballScript = ball.GetComponent<Ball>();
@@ -91,9 +90,12 @@ public class ShootingSystem : MonoBehaviour
         }
         
         ballScript.Initialize(ballLifetime, isChargedShot ? chargedShotRadius : 0f);
+        ballScript.SetSpeed(speed);
         
-        // Destroy ball after lifetime
-        Destroy(ball, ballLifetime);
+        // Destroy ball after lifetime (as backup)
+        Destroy(ball, ballLifetime * 2);
+        
+        Debug.Log($"Ball created at {spawnPosition} moving {direction}");
     }
     
     Transform FindNearestObstacle()
