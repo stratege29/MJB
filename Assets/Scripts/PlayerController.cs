@@ -6,6 +6,8 @@ public class PlayerController : MonoBehaviour
     public float laneDistance = 2f;
     public float laneChangeSpeed = 10f;
     public float jumpForce = 8f;
+    public float doubleJumpForce = 6f;
+    public int maxJumps = 2; // Ground jump + air jump
     public float slideHeight = 0.5f;
     public float slideDuration = 1f;
     
@@ -21,10 +23,12 @@ public class PlayerController : MonoBehaviour
     private int currentLane = 0; // -1 = left, 0 = center, 1 = right
     private Vector3 targetPosition;
     private bool isGrounded;
+    private bool wasGrounded;
     private bool isSliding;
     private float slideTimer;
     private float originalHeight;
     private float originalCenterY;
+    private int jumpsRemaining;
     
     private Vector3 startPosition;
     
@@ -37,6 +41,7 @@ public class PlayerController : MonoBehaviour
         capsuleCollider = GetComponent<CapsuleCollider>();
         inputManager = FindObjectOfType<UnityEventInputManager>();
         shootingSystem = GetComponent<ShootingSystem>();
+        jumpsRemaining = maxJumps;
         
         startPosition = transform.position;
         targetPosition = transform.position;
@@ -118,18 +123,35 @@ public class PlayerController : MonoBehaviour
     void CheckGrounded()
     {
         RaycastHit hit;
-        // Check for ground using tag instead of layer
-        isGrounded = Physics.Raycast(
+        wasGrounded = isGrounded;
+        
+        // Check for ground using multiple methods for reliability
+        bool raycastGrounded = Physics.Raycast(
             transform.position + Vector3.up * 0.1f, 
             Vector3.down, 
             out hit, 
             groundCheckDistance + 0.1f
         );
         
+        // Also check with a small sphere cast for better ground detection
+        bool spherecastGrounded = Physics.CheckSphere(
+            transform.position + Vector3.down * 0.4f,
+            0.3f
+        );
+        
+        isGrounded = raycastGrounded || spherecastGrounded || transform.position.y <= 1.2f;
+        
         // Additional check - if we hit something tagged as Ground
-        if (isGrounded && hit.collider != null)
+        if (raycastGrounded && hit.collider != null)
         {
             isGrounded = hit.collider.CompareTag("Ground") || hit.collider.name.Contains("Ground");
+        }
+        
+        // Reset jumps when landing
+        if (isGrounded && !wasGrounded)
+        {
+            jumpsRemaining = maxJumps;
+            Debug.Log("Landed - jumps reset to " + jumpsRemaining);
         }
     }
     
@@ -169,19 +191,25 @@ public class PlayerController : MonoBehaviour
     
     void Jump()
     {
-        Debug.Log($"Jump called - GameActive: {GameManager.Instance?.IsGameActive}, isGrounded: {isGrounded}, isSliding: {isSliding}");
+        Debug.Log($"Jump called - GameActive: {GameManager.Instance?.IsGameActive}, isGrounded: {isGrounded}, jumpsRemaining: {jumpsRemaining}, isSliding: {isSliding}");
         
         if (!GameManager.Instance.IsGameActive || isSliding) return;
         
-        // Only jump if grounded
-        if (isGrounded)
+        // Can jump if grounded OR have jumps remaining in air
+        if (jumpsRemaining > 0)
         {
+            // Reduce remaining jumps
+            jumpsRemaining--;
+            
             // Reset vertical velocity for consistent jumps
             rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
             
-            // Apply jump force
-            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-            Debug.Log("Player jumped!");
+            // Use different force for ground vs air jump
+            float forceToUse = isGrounded ? jumpForce : doubleJumpForce;
+            rb.AddForce(Vector3.up * forceToUse, ForceMode.Impulse);
+            
+            string jumpType = isGrounded ? "Ground" : "Air";
+            Debug.Log($"{jumpType} jump executed! Jumps remaining: {jumpsRemaining}");
             
             // Reset combo on successful action
             if (GameManager.Instance != null)
@@ -191,7 +219,7 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
-            Debug.Log("Cannot jump - not grounded");
+            Debug.Log("Cannot jump - no jumps remaining");
         }
     }
     

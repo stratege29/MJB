@@ -270,13 +270,31 @@ public class UnityEventInputManager : MonoBehaviour
             // Debug info - ALWAYS show fixed number of labels
             GUILayout.Label("DEBUG INFO:", labelStyle);
             var gameManager = FindObjectOfType<GameManager>();
+            var playerController = FindObjectOfType<PlayerController>();
             string gameActiveText = gameManager != null ? $"Game Active: {gameManager.IsGameActive}" : "Game Active: UNKNOWN";
             string speedText = gameManager != null ? $"Speed: {gameManager.CurrentSpeed:F1}" : "Speed: UNKNOWN";
             string scoreText = gameManager != null ? $"Score: {gameManager.Score}" : "Score: UNKNOWN";
             
+            // Add jump status info
+            string jumpText = "Jumps: UNKNOWN";
+            if (playerController != null)
+            {
+                // Use reflection to get private field values for debugging
+                var jumpField = typeof(PlayerController).GetField("jumpsRemaining", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var groundedField = typeof(PlayerController).GetField("isGrounded", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                
+                if (jumpField != null && groundedField != null)
+                {
+                    int jumpsRemaining = (int)jumpField.GetValue(playerController);
+                    bool isGrounded = (bool)groundedField.GetValue(playerController);
+                    jumpText = $"Jumps: {jumpsRemaining}/2 (Grounded: {isGrounded})";
+                }
+            }
+            
             GUILayout.Label(gameActiveText, labelStyle);
             GUILayout.Label(speedText, labelStyle);
             GUILayout.Label(scoreText, labelStyle);
+            GUILayout.Label(jumpText, labelStyle);
             
             GUILayout.Space(8);
             GUILayout.Label("CONTROLS:", labelStyle);
