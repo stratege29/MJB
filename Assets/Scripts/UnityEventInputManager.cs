@@ -334,7 +334,7 @@ public class UnityEventInputManager : MonoBehaviour
                 GUILayout.Label("Ready to shoot", labelStyle);
                 // Reserve space for gauge when not charging
                 GUILayoutUtility.GetRect(200, 20);
-            }"
+            }
             
             GUILayout.Space(8);
             
