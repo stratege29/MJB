@@ -94,25 +94,6 @@ public class KeyboardInputManager : MonoBehaviour
         }
     }
     
-    void OnGUI()
-    {
-        if (!Application.isEditor) return;
-        
-        GUILayout.BeginArea(new Rect(10, 10, 300, 200));
-        GUILayout.Label("Keyboard Input Manager (Unity 6)");
-        GUILayout.Label("CONTROLS:");
-        GUILayout.Label("A = Move Left");
-        GUILayout.Label("D = Move Right");
-        GUILayout.Label("W = Jump");
-        GUILayout.Label("S = Slide");
-        GUILayout.Label("SPACE = Shoot (hold for charged)");
-        
-        if (isHoldingShoot)
-        {
-            GUILayout.Label($"Charging shot: {shootHoldTime:F1}s");
-        }
-        
-        GUILayout.Label("(No Input System conflicts!)");
-        GUILayout.EndArea();
-    }
+    // GUI removed to prevent overlapping with main control panel
+    // void OnGUI() - disabled
 }

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-[DefaultExecutionOrder(-100)] // Execute before other scripts
+[DefaultExecutionOrder(-1000)] // Execute very early to ensure proper initialization
 public class SceneBootstrapper : MonoBehaviour
 {
     [Header("Auto Setup")]
@@ -14,8 +14,43 @@ public class SceneBootstrapper : MonoBehaviour
         if (setupOnAwake)
         {
             Debug.Log("=== Scene Bootstrapper Starting ===");
+            ValidateAndInitializeCamera();
             BootstrapScene();
         }
+    }
+    
+    void ValidateAndInitializeCamera()
+    {
+        // Ensure camera exists and is properly configured before anything else
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+        {
+            GameObject cameraObj = GameObject.Find("Main Camera");
+            if (cameraObj == null)
+            {
+                cameraObj = new GameObject("Main Camera");
+                mainCamera = cameraObj.AddComponent<Camera>();
+                cameraObj.AddComponent<AudioListener>();
+                cameraObj.tag = "MainCamera";
+            }
+            else
+            {
+                mainCamera = cameraObj.GetComponent<Camera>();
+                if (mainCamera == null)
+                {
+                    mainCamera = cameraObj.AddComponent<Camera>();
+                }
+            }
+        }
+        
+        // Ensure camera viewport is valid
+        if (mainCamera.pixelWidth <= 0 || mainCamera.pixelHeight <= 0)
+        {
+            mainCamera.ResetAspect();
+            mainCamera.rect = new Rect(0, 0, 1, 1);
+        }
+        
+        Debug.Log($"✓ Camera validated - Viewport: {mainCamera.pixelWidth}x{mainCamera.pixelHeight}");
     }
     
     void BootstrapScene()
@@ -49,6 +84,22 @@ public class SceneBootstrapper : MonoBehaviour
     
     void CreateEssentialManagers()
     {
+        // MouseEventSanitizer - MUST be created first to prevent frustum errors
+        if (FindObjectOfType<MouseEventSanitizer>() == null)
+        {
+            GameObject mouseSanitizer = new GameObject("MouseEventSanitizer");
+            mouseSanitizer.AddComponent<MouseEventSanitizer>();
+            Debug.Log("✓ Created MouseEventSanitizer");
+        }
+        
+        // SafeGUIRenderer - Created second for GUI safety
+        if (FindObjectOfType<SafeGUIRenderer>() == null)
+        {
+            GameObject safeGui = new GameObject("SafeGUIRenderer");
+            safeGui.AddComponent<SafeGUIRenderer>();
+            Debug.Log("✓ Created SafeGUIRenderer");
+        }
+        
         // Unity6Initializer and InputSystemBypass (ensure they exist)
         if (FindObjectOfType<Unity6Initializer>() == null)
         {
@@ -245,10 +296,16 @@ public class SceneBootstrapper : MonoBehaviour
         Camera mainCamera = Camera.main;
         if (mainCamera == null)
         {
-            GameObject cameraObj = new GameObject("Main Camera");
-            mainCamera = cameraObj.AddComponent<Camera>();
-            cameraObj.AddComponent<AudioListener>();
-            cameraObj.tag = "MainCamera";
+            // This should not happen as we validate camera in Awake
+            Debug.LogError("Main camera missing after validation!");
+            return;
+        }
+        
+        // Verify camera is still valid
+        if (mainCamera.pixelWidth <= 0 || mainCamera.pixelHeight <= 0)
+        {
+            mainCamera.ResetAspect();
+            mainCamera.rect = new Rect(0, 0, 1, 1);
         }
         
         // Add CameraFollow if missing
@@ -262,7 +319,10 @@ public class SceneBootstrapper : MonoBehaviour
         mainCamera.transform.position = new Vector3(0, 3f, -6f);
         mainCamera.transform.rotation = Quaternion.Euler(15f, 0f, 0f);
         
-        Debug.Log("✓ Camera configured");
+        // Force camera to update its matrices
+        mainCamera.Render();
+        
+        Debug.Log($"✓ Camera configured - Position: {mainCamera.transform.position}, Viewport: {mainCamera.pixelWidth}x{mainCamera.pixelHeight}");
     }
     
     void ConfigureGameSettings()
@@ -271,15 +331,23 @@ public class SceneBootstrapper : MonoBehaviour
         Application.targetFrameRate = 60;
         QualitySettings.vSyncCount = 0;
         
+        // Validate screen dimensions
+        if (Screen.width <= 0 || Screen.height <= 0)
+        {
+            Debug.LogWarning($"Invalid screen dimensions detected: {Screen.width}x{Screen.height}");
+            // Force screen refresh
+            Screen.SetResolution(Screen.currentResolution.width, Screen.currentResolution.height, Screen.fullScreen);
+        }
+        
         // Start the game automatically
         GameManager gameManager = FindObjectOfType<GameManager>();
         if (gameManager != null)
         {
-            // Small delay to ensure everything is initialized
-            Invoke(nameof(StartGame), 0.1f);
+            // Increased delay to ensure everything is properly initialized
+            Invoke(nameof(StartGame), 0.2f);
         }
         
-        Debug.Log("✓ Game settings configured");
+        Debug.Log($"✓ Game settings configured - Screen: {Screen.width}x{Screen.height}");
     }
     
     void StartGame()

@@ -34,13 +34,19 @@ public class ShootingSystem : MonoBehaviour
     
     public void QuickShot()
     {
-        if (ballPrefab == null) return;
+        Debug.Log("QuickShot called");
+        if (ballPrefab == null) 
+        {
+            Debug.LogError("Ball prefab is null!");
+            return;
+        }
         
         Transform target = FindNearestObstacle();
         Vector3 shootDirection = target != null ? 
             (target.position - shootPoint.position).normalized : 
             Vector3.forward;
         
+        Debug.Log($"Creating ball, direction: {shootDirection}");
         CreateBall(shootDirection, ballSpeed, false);
     }
     

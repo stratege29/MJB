@@ -184,34 +184,6 @@ public class Unity6InputManager : MonoBehaviour
         touchStartTime = 0f;
     }
     
-    // Debug visualization
-    void OnGUI()
-    {
-        if (!Application.isEditor) return;
-        
-        GUILayout.BeginArea(new Rect(10, 10, 300, 200));
-        GUILayout.Label("Unity 6 Input Manager (Legacy Input)");
-        GUILayout.Label($"Touching: {isTouching}");
-        GUILayout.Label($"Start Pos: {startTouchPosition}");
-        
-        if (isTouching)
-        {
-            try
-            {
-                Vector2 currentPos = UnityEngine.Input.touchCount > 0 ? UnityEngine.Input.GetTouch(0).position : (Vector2)UnityEngine.Input.mousePosition;
-                GUILayout.Label($"Current Pos: {currentPos}");
-            }
-            catch
-            {
-                GUILayout.Label("Current Pos: Input conflict mode");
-            }
-            GUILayout.Label($"Touch Duration: {Time.time - touchStartTime:F2}s");
-        }
-        
-        GUILayout.Label("Controls:");
-        GUILayout.Label("Mouse/Touch drag = Swipe");
-        GUILayout.Label("Quick click/tap = Tap");
-        GUILayout.Label("Long click/tap = Hold");
-        GUILayout.EndArea();
-    }
+    // GUI removed to prevent overlapping with main control panel
+    // OnGUI method disabled to avoid conflicts
 }

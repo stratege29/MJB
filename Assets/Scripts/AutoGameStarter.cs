@@ -84,22 +84,6 @@ public class AutoGameStarter : MonoBehaviour
         Debug.Log("==================");
     }
     
-    void OnGUI()
-    {
-        if (!Application.isEditor) return;
-        
-        // Show instructions on screen
-        GUI.Box(new Rect(10, 10, 300, 150), "");
-        GUILayout.BeginArea(new Rect(15, 15, 290, 140));
-        
-        GUILayout.Label("Just Play Mariam - Unity 6");
-        GUILayout.Space(5);
-        GUILayout.Label("GUI BUTTON CONTROLS:");
-        GUILayout.Label("Click the buttons on the left");
-        GUILayout.Label("to control the game!");
-        GUILayout.Label("No Input System conflicts!");
-        GUILayout.Label("• Hold = Charged shot");
-        
-        GUILayout.EndArea();
-    }
+    // GUI removed to prevent overlapping with main control panel
+    // Instructions are shown in UnityEventInputManager panel
 }

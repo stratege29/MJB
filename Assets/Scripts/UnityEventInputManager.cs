@@ -26,11 +26,37 @@ public class UnityEventInputManager : MonoBehaviour
     
     private bool isCharging = false;
     private float chargeStartTime;
+    private bool isGUIReady = false;
+    private float initializationDelay = 0.1f; // Delay to ensure camera is ready
     
     void Start()
     {
         Debug.Log("✓ Unity Event Input Manager initialized (Zero Input System conflicts)");
         Debug.Log("Using GUI buttons and Unity Events - completely safe in Unity 6");
+        
+        // Delay GUI initialization to ensure camera is ready
+        StartCoroutine(InitializeGUIWithDelay());
+    }
+    
+    System.Collections.IEnumerator InitializeGUIWithDelay()
+    {
+        // Wait for initialization delay
+        yield return new WaitForSeconds(initializationDelay);
+        
+        // Verify camera is ready
+        Camera mainCam = Camera.main;
+        if (mainCam != null && mainCam.pixelWidth > 0 && mainCam.pixelHeight > 0)
+        {
+            isGUIReady = true;
+            Debug.Log($"✓ GUI Ready - Camera viewport: {mainCam.pixelWidth}x{mainCam.pixelHeight}");
+        }
+        else
+        {
+            // If camera not ready, wait a bit more
+            yield return new WaitForSeconds(0.5f);
+            isGUIReady = true;
+            Debug.LogWarning("GUI enabled after extended wait");
+        }
     }
     
     void Update()
@@ -152,7 +178,13 @@ public class UnityEventInputManager : MonoBehaviour
     
     void OnGUI()
     {
-        if (!enableGUIControls) return;
+        if (!enableGUIControls || !isGUIReady) return;
+        
+        // Use SafeGUIRenderer for additional safety
+        if (!SafeGUIRenderer.CanRenderGUI()) return;
+        
+        // Validate screen dimensions before rendering
+        if (!ValidateScreenDimensions()) return;
         
         // Style setup for better visibility
         GUIStyle buttonStyle = new GUIStyle(GUI.skin.button);
@@ -166,9 +198,12 @@ public class UnityEventInputManager : MonoBehaviour
         titleStyle.fontSize = 16;
         titleStyle.fontStyle = FontStyle.Bold;
         
-        // Main control panel with background
-        GUI.Box(new Rect(5, 5, 280, 450), "");
-        GUILayout.BeginArea(new Rect(15, 15, 260, 430));
+        // Main control panel with background - use safe rect creation
+        Rect boxRect = SafeGUIRenderer.CreateSafeRect(5, 5, 280, 450);
+        Rect areaRect = SafeGUIRenderer.CreateSafeRect(15, 15, 260, 430);
+        
+        GUI.Box(boxRect, "");
+        GUILayout.BeginArea(areaRect);
         
         if (showControlsGUI)
         {
@@ -252,5 +287,59 @@ public class UnityEventInputManager : MonoBehaviour
         }
         
         GUILayout.EndArea();
+    }
+    
+    bool ValidateScreenDimensions()
+    {
+        // Check if screen dimensions are valid
+        if (Screen.width <= 0 || Screen.height <= 0)
+        {
+            return false;
+        }
+        
+        // Check if camera is properly initialized
+        Camera mainCam = Camera.main;
+        if (mainCam == null)
+        {
+            return false;
+        }
+        
+        // Verify camera viewport is valid
+        if (mainCam.pixelWidth <= 0 || mainCam.pixelHeight <= 0)
+        {
+            return false;
+        }
+        
+        // Additional safety check for GUI rendering area
+        try
+        {
+            // Test if we can create a rect without issues
+            Rect testRect = new Rect(0, 0, Mathf.Min(280, Screen.width), Mathf.Min(450, Screen.height));
+            if (testRect.width <= 0 || testRect.height <= 0)
+            {
+                return false;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    void OnDisable()
+    {
+        // Clean up when disabled
+        isGUIReady = false;
+    }
+    
+    void OnEnable()
+    {
+        // Re-initialize when enabled
+        if (Application.isPlaying)
+        {
+            StartCoroutine(InitializeGUIWithDelay());
+        }
     }
 }

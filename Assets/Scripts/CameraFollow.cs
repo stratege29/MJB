@@ -18,9 +18,28 @@ public class CameraFollow : MonoBehaviour
     public float rotationSmoothing = 3f;
     
     private Vector3 velocity = Vector3.zero;
+    private bool isInitialized = false;
     
     void Start()
     {
+        // Initialize camera immediately
+        InitializeCamera();
+    }
+    
+    void InitializeCamera()
+    {
+        // Ensure camera component is properly set up
+        Camera cam = GetComponent<Camera>();
+        if (cam != null)
+        {
+            // Ensure camera viewport is valid
+            if (cam.pixelWidth <= 0 || cam.pixelHeight <= 0)
+            {
+                // Force refresh camera dimensions
+                cam.ResetAspect();
+            }
+        }
+        
         // Auto-find player if no target assigned
         if (target == null)
         {
@@ -41,11 +60,14 @@ public class CameraFollow : MonoBehaviour
                 LookAtTarget();
             }
         }
+        
+        isInitialized = true;
+        Debug.Log($"✓ Camera initialized at position: {transform.position}");
     }
     
     void LateUpdate()
     {
-        if (target == null) return;
+        if (!isInitialized || target == null) return;
         
         UpdateCameraPosition();
         
@@ -120,6 +142,12 @@ public class CameraFollow : MonoBehaviour
     {
         target = newTarget;
         velocity = Vector3.zero; // Reset velocity for smooth transition
+        
+        // Re-initialize if needed
+        if (!isInitialized)
+        {
+            InitializeCamera();
+        }
     }
     
     // Method to set offset (useful for different camera angles)
@@ -173,5 +201,19 @@ public class CameraFollow : MonoBehaviour
                 Gizmos.DrawWireSphere(target.position + lookOffset, 0.2f);
             }
         }
+    }
+    
+    void OnEnable()
+    {
+        // Re-initialize when enabled
+        if (Application.isPlaying && !isInitialized)
+        {
+            InitializeCamera();
+        }
+    }
+    
+    void OnDisable()
+    {
+        isInitialized = false;
     }
 }

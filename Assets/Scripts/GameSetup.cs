@@ -145,14 +145,15 @@ public class GameSetup : MonoBehaviour
     
     void SetupInputManager()
     {
-        Unity6InputManager existingInput = FindObjectOfType<Unity6InputManager>();
+        // Disabled - Using UnityEventInputManager instead to avoid duplicates
+        // Unity6InputManager existingInput = FindObjectOfType<Unity6InputManager>();
         
-        if (existingInput == null)
-        {
-            GameObject inputObj = new GameObject("Unity6InputManager");
-            inputObj.AddComponent<Unity6InputManager>();
-            Debug.Log("Unity6InputManager created - Legacy Input System for Unity 6 compatibility.");
-        }
+        // if (existingInput == null)
+        // {
+        //     GameObject inputObj = new GameObject("Unity6InputManager");
+        //     inputObj.AddComponent<Unity6InputManager>();
+        //     Debug.Log("Unity6InputManager created - Legacy Input System for Unity 6 compatibility.");
+        // }
     }
     
     // AdaptivePerformanceManager not needed for Built-in Pipeline
