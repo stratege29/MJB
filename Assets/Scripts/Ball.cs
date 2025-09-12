@@ -55,6 +55,9 @@ public class Ball : MonoBehaviour
         {
             SetupVisuals();
         }
+        
+        // Configure trail for shot type
+        SetupTrail();
     }
     
     void SetupVisuals()
@@ -66,15 +69,32 @@ public class Ball : MonoBehaviour
         // Use built-in sphere mesh
         meshFilter.mesh = CreateSphereMesh();
         
-        // Create a basic material using URP shader for Unity 6
+        // Create enhanced material for charged vs normal shots
         Material ballMaterial = new Material(Shader.Find("Standard"));
-        ballMaterial.color = isChargedShot ? Color.red : Color.cyan;
-        ballMaterial.SetFloat("_Metallic", 0.5f);
-        ballMaterial.SetFloat("_Glossiness", 0.8f);
+        
+        if (isChargedShot)
+        {
+            // Golden charged shot with emission
+            ballMaterial.color = new Color(1f, 0.84f, 0f); // Gold
+            ballMaterial.SetFloat("_Metallic", 0.8f);
+            ballMaterial.SetFloat("_Glossiness", 1f);
+            ballMaterial.EnableKeyword("_EMISSION");
+            ballMaterial.SetColor("_EmissionColor", new Color(1f, 0.6f, 0f) * 0.5f); // Orange glow
+        }
+        else
+        {
+            // Cyan normal shot
+            ballMaterial.color = Color.cyan;
+            ballMaterial.SetFloat("_Metallic", 0.3f);
+            ballMaterial.SetFloat("_Glossiness", 0.7f);
+            ballMaterial.EnableKeyword("_EMISSION");
+            ballMaterial.SetColor("_EmissionColor", Color.cyan * 0.2f);
+        }
+        
         meshRenderer.material = ballMaterial;
         
-        // Scale the ball - make it bigger so it's more visible
-        transform.localScale = Vector3.one * (isChargedShot ? 0.5f : 0.4f);
+        // Scale the ball - charged shots are bigger and more visible
+        transform.localScale = Vector3.one * (isChargedShot ? 0.6f : 0.4f);
     }
     
     Mesh CreateSphereMesh()
@@ -84,6 +104,31 @@ public class Ball : MonoBehaviour
         Mesh sphereMesh = tempSphere.GetComponent<MeshFilter>().mesh;
         DestroyImmediate(tempSphere);
         return sphereMesh;
+    }
+    
+    void SetupTrail()
+    {
+        TrailRenderer trail = GetComponent<TrailRenderer>();
+        if (trail == null) return;
+        
+        if (isChargedShot)
+        {
+            // Golden charged trail - thicker and longer
+            trail.time = 0.8f;
+            trail.startWidth = 0.5f;
+            trail.endWidth = 0.1f;
+            trail.startColor = new Color(1f, 0.84f, 0f); // Gold
+            trail.endColor = new Color(1f, 0.6f, 0f, 0f); // Orange fade
+        }
+        else
+        {
+            // Cyan normal trail
+            trail.time = 0.5f;
+            trail.startWidth = 0.3f;
+            trail.endWidth = 0.05f;
+            trail.startColor = Color.cyan;
+            trail.endColor = new Color(0, 1, 1, 0);
+        }
     }
     
     void Update()
@@ -132,8 +177,9 @@ public class Ball : MonoBehaviour
             }
         }
         
-        // Rotate the ball for visual effect
-        transform.Rotate(Vector3.up * 360f * Time.deltaTime);
+        // Rotate the ball for visual effect - charged shots spin faster
+        float rotationSpeed = isChargedShot ? 720f : 360f;
+        transform.Rotate(Vector3.up * rotationSpeed * Time.deltaTime);
     }
     
     private float ballSpeed = 15f; // Default speed
@@ -167,6 +213,8 @@ public class Ball : MonoBehaviour
     {
         hasExploded = true;
         
+        bool obstacleDestroyed = false;
+        
         if (isChargedShot && explosionRadius > 0f)
         {
             // Charged shot - affect multiple obstacles
@@ -176,7 +224,12 @@ public class Ball : MonoBehaviour
             {
                 if (obstacle.CompareTag("Obstacle"))
                 {
-                    DestroyObstacle(obstacle.gameObject);
+                    Obstacle obstacleComponent = obstacle.GetComponent<Obstacle>();
+                    if (obstacleComponent != null)
+                    {
+                        bool destroyed = obstacleComponent.TakeDamage(2, true); // Charged shots do 2 damage
+                        if (destroyed) obstacleDestroyed = true;
+                    }
                 }
             }
             
@@ -186,10 +239,24 @@ public class Ball : MonoBehaviour
         else
         {
             // Regular shot - affect only the hit obstacle
-            DestroyObstacle(hitObstacle.gameObject);
+            Obstacle obstacleComponent = hitObstacle.GetComponent<Obstacle>();
+            if (obstacleComponent != null)
+            {
+                obstacleDestroyed = obstacleComponent.TakeDamage(1, false); // Normal shots do 1 damage
+            }
         }
         
-        DestroyBall();
+        // Only destroy ball if we actually destroyed an obstacle or it's a charged shot
+        if (obstacleDestroyed || isChargedShot)
+        {
+            DestroyBall();
+        }
+        else
+        {
+            // Ball bounces off if it didn't destroy the obstacle
+            Debug.Log("Ball bounced off strong obstacle - continuing trajectory");
+            // Could add bounce physics here if desired
+        }
     }
     
     void DestroyObstacle(GameObject obstacle)
@@ -209,24 +276,41 @@ public class Ball : MonoBehaviour
     
     void CreateExplosionEffect()
     {
-        // Simple particle-like explosion effect
-        for (int i = 0; i < 8; i++)
+        // Enhanced explosion effect for charged shots
+        int particleCount = isChargedShot ? 15 : 8;
+        Color explosionColor = isChargedShot ? new Color(1f, 0.84f, 0f) : Color.red; // Gold for charged, red for normal
+        
+        for (int i = 0; i < particleCount; i++)
         {
             GameObject particle = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            particle.transform.position = transform.position;
-            particle.transform.localScale = Vector3.one * 0.1f;
+            particle.transform.position = transform.position + Random.insideUnitSphere * 0.5f;
+            particle.transform.localScale = Vector3.one * Random.Range(0.08f, 0.15f);
+            particle.transform.rotation = Random.rotation;
             
             Rigidbody particleRb = particle.AddComponent<Rigidbody>();
             Vector3 randomDirection = Random.insideUnitSphere.normalized;
-            particleRb.AddForce(randomDirection * 5f, ForceMode.Impulse);
+            float force = isChargedShot ? 8f : 5f;
+            particleRb.AddForce(randomDirection * force, ForceMode.Impulse);
+            particleRb.AddTorque(Random.insideUnitSphere * force, ForceMode.Impulse);
             
-            // Change color to explosion color using URP shader
+            // Enhanced explosion material with emission
             Material particleMat = new Material(Shader.Find("Standard"));
-            particleMat.color = Color.red;
+            particleMat.color = explosionColor;
+            particleMat.EnableKeyword("_EMISSION");
+            particleMat.SetColor("_EmissionColor", explosionColor * 0.5f);
+            particleMat.SetFloat("_Metallic", 0.3f);
+            particleMat.SetFloat("_Glossiness", 0.8f);
             particle.GetComponent<MeshRenderer>().material = particleMat;
             
-            // Destroy particles after short time
-            Destroy(particle, 1f);
+            // Destroy particles after time with some variation
+            Destroy(particle, Random.Range(1f, 2f));
+        }
+        
+        // Add screen shake effect for charged explosions
+        if (isChargedShot)
+        {
+            Debug.Log("BOOM! Charged explosion with screen shake!");
+            // Screen shake would be implemented in camera script
         }
     }
     

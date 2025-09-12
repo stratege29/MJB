@@ -26,6 +26,8 @@ public class UnityEventInputManager : MonoBehaviour
     
     private bool isCharging = false;
     private float chargeStartTime;
+    private float chargeTime = 1.5f; // Time required to fully charge
+    private bool isFullyCharged = false;
     private bool isGUIReady = false;
     private float initializationDelay = 0.1f; // Delay to ensure camera is ready
     
@@ -64,11 +66,14 @@ public class UnityEventInputManager : MonoBehaviour
         // Handle charging logic
         if (isCharging)
         {
-            if (Time.time - chargeStartTime >= 0.5f)
+            float chargeDuration = Time.time - chargeStartTime;
+            
+            // Check if fully charged
+            if (chargeDuration >= chargeTime && !isFullyCharged)
             {
-                // Auto-release charged shot after 0.5 seconds
-                PerformChargedShoot();
-                isCharging = false;
+                isFullyCharged = true;
+                Debug.Log("Shot fully charged!");
+                // Could add charge complete sound effect here
             }
         }
         
@@ -163,6 +168,7 @@ public class UnityEventInputManager : MonoBehaviour
         if (!isCharging)
         {
             isCharging = true;
+            isFullyCharged = false;
             chargeStartTime = Time.time;
             Debug.Log("Charging shot...");
         }
@@ -170,10 +176,28 @@ public class UnityEventInputManager : MonoBehaviour
     
     public void PerformChargedShoot()
     {
-        OnTapHold?.Invoke();
-        OnChargedShoot?.Invoke();
-        Debug.Log("Charged Shot triggered");
-        isCharging = false;
+        if (isCharging)
+        {
+            // Only perform charged shot if minimum charge time is met
+            float chargeDuration = Time.time - chargeStartTime;
+            
+            if (chargeDuration >= 0.3f) // Minimum charge time
+            {
+                OnTapHold?.Invoke();
+                OnChargedShoot?.Invoke();
+                Debug.Log($"Charged Shot triggered (charged for {chargeDuration:F1}s)");
+            }
+            else
+            {
+                // Not charged enough, perform normal shot
+                OnTap?.Invoke();
+                OnShoot?.Invoke();
+                Debug.Log("Insufficient charge - performing normal shot");
+            }
+            
+            isCharging = false;
+            isFullyCharged = false;
+        }
     }
     
     void OnGUI()
@@ -260,10 +284,57 @@ public class UnityEventInputManager : MonoBehaviour
             
             GUILayout.Space(8);
             
-            // Charging status - ALWAYS reserve space to prevent layout changes
-            GUILayout.Label("STATUS:", labelStyle);
-            string chargeText = isCharging ? $"Charging: {(Time.time - chargeStartTime):F1}s" : "Ready to shoot";
-            GUILayout.Label(chargeText, labelStyle);
+            // Charging status with visual gauge
+            GUILayout.Label("CHARGE STATUS:", labelStyle);
+            
+            if (isCharging)
+            {
+                float chargeDuration = Time.time - chargeStartTime;
+                float chargePercent = Mathf.Clamp01(chargeDuration / chargeTime);
+                
+                // Create charging gauge
+                Rect gaugeRect = GUILayoutUtility.GetRect(200, 20);
+                
+                // Background
+                GUI.color = Color.black;
+                GUI.DrawTexture(gaugeRect, Texture2D.whiteTexture);
+                
+                // Charge fill
+                Rect fillRect = new Rect(gaugeRect.x + 2, gaugeRect.y + 2, (gaugeRect.width - 4) * chargePercent, gaugeRect.height - 4);
+                
+                // Color progression: yellow → orange → red → gold when full
+                Color chargeColor;
+                if (chargePercent < 0.33f)
+                    chargeColor = Color.yellow;
+                else if (chargePercent < 0.66f)
+                    chargeColor = Color.Lerp(Color.yellow, new Color(1f, 0.5f, 0f), (chargePercent - 0.33f) / 0.33f); // Orange
+                else if (chargePercent < 1f)
+                    chargeColor = Color.Lerp(new Color(1f, 0.5f, 0f), Color.red, (chargePercent - 0.66f) / 0.34f);
+                else
+                    chargeColor = new Color(1f, 0.84f, 0f); // Gold when fully charged
+                
+                GUI.color = chargeColor;
+                if (fillRect.width > 0)
+                    GUI.DrawTexture(fillRect, Texture2D.whiteTexture);
+                
+                // Reset color
+                GUI.color = Color.white;
+                
+                // Charge text
+                string chargeText = isFullyCharged ? "FULLY CHARGED!" : $"Charging: {chargePercent * 100:F0}%";
+                GUIStyle chargeStyle = new GUIStyle(labelStyle);
+                if (isFullyCharged)
+                {
+                    chargeStyle.normal.textColor = Color.yellow;
+                }
+                GUILayout.Label(chargeText, chargeStyle);
+            }
+            else
+            {
+                GUILayout.Label("Ready to shoot", labelStyle);
+                // Reserve space for gauge when not charging
+                GUILayoutUtility.GetRect(200, 20);
+            }"
             
             GUILayout.Space(8);
             

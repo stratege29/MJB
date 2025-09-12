@@ -143,12 +143,29 @@ public class ObstacleSpawner : MonoBehaviour
         obstacle.transform.position = position;
         obstacle.transform.localScale = new Vector3(1f, obstacleType.height, 1f);
         
-        // Set color based on type using URP shader
-        Material obstacleMat = new Material(Shader.Find("Standard"));
-        obstacleMat.color = obstacleType.canBeDestroyed ? Color.red : Color.gray;
-        obstacle.GetComponent<MeshRenderer>().material = obstacleMat;
-        
         SetupObstacle(obstacle, obstacleType);
+        
+        // Configure obstacle type based on name
+        Obstacle obstacleComponent = obstacle.GetComponent<Obstacle>();
+        if (obstacleComponent != null)
+        {
+            if (obstacleType.name.Contains("Weak"))
+            {
+                obstacleComponent.obstacleType = global::ObstacleType.Weak;
+            }
+            else if (obstacleType.name.Contains("Strong") || obstacleType.name.Contains("Metal"))
+            {
+                obstacleComponent.obstacleType = global::ObstacleType.Strong;
+            }
+            else if (obstacleType.name.Contains("Reinforced"))
+            {
+                obstacleComponent.obstacleType = global::ObstacleType.Reinforced;
+            }
+            
+            // This will trigger the visual setup
+            obstacle.SetActive(false);
+            obstacle.SetActive(true);
+        }
     }
     
     ObstacleType GetRandomObstacleType()
@@ -204,25 +221,44 @@ public class ObstacleSpawner : MonoBehaviour
     {
         obstacleTypes = new ObstacleType[]
         {
+            // Weak obstacles - common, destroyed by any shot
             new ObstacleType 
             { 
-                name = "Crate", 
-                spawnWeight = 1f, 
+                name = "WeakCrate", 
+                spawnWeight = 3f, 
+                canBeDestroyed = true, 
+                height = 0.8f 
+            },
+            new ObstacleType 
+            { 
+                name = "WeakBarrel", 
+                spawnWeight = 2f, 
                 canBeDestroyed = true, 
                 height = 1f 
             },
+            
+            // Strong obstacles - less common, need charged shots
             new ObstacleType 
             { 
-                name = "Barrier", 
-                spawnWeight = 0.7f, 
+                name = "StrongBlock", 
+                spawnWeight = 1f, 
                 canBeDestroyed = true, 
-                height = 0.5f 
+                height = 1.2f 
             },
             new ObstacleType 
             { 
-                name = "Wall", 
-                spawnWeight = 0.3f, 
-                canBeDestroyed = false, 
+                name = "MetalWall", 
+                spawnWeight = 0.8f, 
+                canBeDestroyed = true, 
+                height = 1.5f 
+            },
+            
+            // Reinforced obstacles - rare, need multiple charged shots
+            new ObstacleType 
+            { 
+                name = "ReinforcedFortress", 
+                spawnWeight = 0.2f, 
+                canBeDestroyed = true, 
                 height = 2f 
             }
         };

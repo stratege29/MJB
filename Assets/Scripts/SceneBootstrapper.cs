@@ -288,7 +288,7 @@ public class SceneBootstrapper : MonoBehaviour
         ballMat.SetColor("_EmissionColor", new Color(0f, 0.5f, 0.5f)); // Slight glow
         ball.GetComponent<MeshRenderer>().material = ballMat;
         
-        // Add trail for better visibility
+        // Add trail for better visibility (will be configured per shot type)
         TrailRenderer trail = ball.AddComponent<TrailRenderer>();
         trail.time = 0.5f;
         trail.startWidth = 0.3f;
