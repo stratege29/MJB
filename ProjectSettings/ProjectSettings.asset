@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!129 &1
+PlayerSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 28
+  productGUID: 3a4d3c2b1e9f8d7c6b5a9e8d7c6b5a4e
+  AndroidProfiler: 0
+  AndroidFilterTouchesWhenObscured: 0
+  AndroidEnableSustainedPerformanceMode: 0
+  defaultScreenOrientation: 0
+  targetDevice: 2
+  useOnDemandResources: 0
+  accelerometerFrequency: 60
+  companyName: JustPlayStudio
+  productName: Just Play Mariam
+  defaultCursor: {fileID: 0}
+  cursorHotspot: {x: 0, y: 0}
+  m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
+  enableUnityConnect: 1
+  unityConnectMode: 0
+  crashReportingEnabled: 1
+  enableCloudProjectId: 1
+  androidTargetSdkVersion: 34
+  androidMinSdkVersion: 24
+  iOSTargetOSVersionString: 12.0
+  androidSplashScreenScale: 0
+  androidRenderOutsideSafeArea: 1
+  iosShowActivityIndicatorOnLoading: -1
+  iosAppInBackgroundBehavior: 0
+  enableNativePlatformBackendsForNewInputSystem: 0
+  disableOldInputManagerSupport: 0
+  activeInputHandler: 0
+  legacyClampBlendShapeWeights: 0
+  virtualTexturingSupportEnabled: 0
+  insecureHttpOption: 0
+  useLegacyMeshOptimization: 0
+  scriptingRuntimeVersion: 1
+  apiCompatibilityLevelPerPlatform: {}
+  m_ApplicationIdentifier:
+    Android: com.justplaystudio.mariam
+    iOS: com.justplaystudio.mariam
+  m_BuildTargetPlatformSettings:
+  - m_BuildTarget: Android
+    m_PlayerSettings:
+      m_AndroidProfiler: 0
+      m_AndroidDeepLinkingEnabled: 0
+      m_AndroidOpenSourceBuild: 0
+  - m_BuildTarget: iOS
+    m_PlayerSettings:
+      m_MetalAPIValidation: 1
+      m_iOSManualSigningProvisioningProfileID: 
+      m_iOSManualSigningProvisioningProfileType: 0
