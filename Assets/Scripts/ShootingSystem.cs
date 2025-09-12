@@ -7,7 +7,6 @@ public class ShootingSystem : MonoBehaviour
     public Transform shootPoint;
     public float ballSpeed = 15f;
     public float ballLifetime = 5f; // Increased for boomerang return
-    public float shotCooldown = 0.3f; // Cooldown between shots
     public float chargedShotMultiplier = 2f;
     public float autoTargetRange = 10f;
     public LayerMask obstacleLayer = 1;
@@ -18,7 +17,7 @@ public class ShootingSystem : MonoBehaviour
     public int maxChargedTargets = 3;
     
     private Transform playerTransform;
-    private float lastShotTime = -1f; // Track last shot time
+    private GameObject activeBall; // Track current active ball
     
     void Start()
     {
@@ -43,10 +42,10 @@ public class ShootingSystem : MonoBehaviour
             return;
         }
         
-        // Check cooldown
-        if (Time.time - lastShotTime < shotCooldown)
+        // Check if there's already an active ball
+        if (activeBall != null)
         {
-            Debug.Log($"Shot on cooldown - {shotCooldown - (Time.time - lastShotTime):F1}s remaining");
+            Debug.Log("Ball already active - cannot shoot another");
             return;
         }
         
@@ -55,7 +54,6 @@ public class ShootingSystem : MonoBehaviour
         
         Debug.Log($"Creating ball, direction: {shootDirection}");
         CreateBall(shootDirection, ballSpeed, false);
-        lastShotTime = Time.time;
     }
     
     public void ChargedShot()
@@ -67,18 +65,16 @@ public class ShootingSystem : MonoBehaviour
             return;
         }
         
-        // Check cooldown (charged shots have longer cooldown)
-        float chargedCooldown = shotCooldown * 2f;
-        if (Time.time - lastShotTime < chargedCooldown)
+        // Check if there's already an active ball
+        if (activeBall != null)
         {
-            Debug.Log($"Charged shot on cooldown - {chargedCooldown - (Time.time - lastShotTime):F1}s remaining");
+            Debug.Log("Ball already active - cannot shoot charged shot");
             return;
         }
         
         // Always shoot forward with charged power
         Vector3 shootDirection = transform.forward;
         CreateBall(shootDirection, chargedShotForce, true);
-        lastShotTime = Time.time;
     }
     
     void CreateBall(Vector3 direction, float speed, bool isChargedShot)
@@ -111,10 +107,33 @@ public class ShootingSystem : MonoBehaviour
         ballScript.Initialize(ballLifetime, isChargedShot ? chargedShotRadius : 0f);
         ballScript.SetSpeed(speed);
         
-        // Destroy ball after lifetime (as backup)
-        Destroy(ball, ballLifetime * 2);
+        // Clear reference when ball is destroyed
+        StartCoroutine(ClearBallReference(ball, ballLifetime * 2));
+        
+        // Track the active ball
+        activeBall = ball;
         
         Debug.Log($"Ball created at {spawnPosition} moving {direction}");
+    }
+    
+    System.Collections.IEnumerator ClearBallReference(GameObject ball, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        if (activeBall == ball)
+        {
+            activeBall = null;
+            Debug.Log("Ball reference cleared - can shoot again");
+        }
+    }
+    
+    // Called by Ball script when it's destroyed
+    public void OnBallDestroyed(GameObject ball)
+    {
+        if (activeBall == ball)
+        {
+            activeBall = null;
+            Debug.Log("Ball destroyed - can shoot again");
+        }
     }
     
     Transform FindNearestObstacle()

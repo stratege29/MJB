@@ -17,6 +17,7 @@ public class Ball : MonoBehaviour
     private Vector3 startPosition;
     private Vector3 forwardDirection;
     private float travelDistance = 0f;
+    private ShootingSystem shootingSystem;
     
     public void Initialize(float ballLifetime, float chargedRadius)
     {
@@ -29,6 +30,7 @@ public class Ball : MonoBehaviour
         if (player != null)
         {
             playerTransform = player.transform;
+            shootingSystem = player.GetComponent<ShootingSystem>();
             Debug.Log($"Ball found player: {player.name}");
         }
         else
@@ -253,6 +255,12 @@ public class Ball : MonoBehaviour
     
     void DestroyBall()
     {
+        // Notify shooting system before destroying
+        if (shootingSystem != null)
+        {
+            shootingSystem.OnBallDestroyed(gameObject);
+        }
+        
         Destroy(gameObject);
     }
     

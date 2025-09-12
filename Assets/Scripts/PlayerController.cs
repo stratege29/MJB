@@ -6,8 +6,6 @@ public class PlayerController : MonoBehaviour
     public float laneDistance = 2f;
     public float laneChangeSpeed = 10f;
     public float jumpForce = 8f;
-    public float doubleJumpForce = 6f; // Slightly less force for double jump
-    public int maxJumps = 2; // Maximum jumps (including ground jump)
     public float slideHeight = 0.5f;
     public float slideDuration = 1f;
     
@@ -27,8 +25,6 @@ public class PlayerController : MonoBehaviour
     private float slideTimer;
     private float originalHeight;
     private float originalCenterY;
-    private int jumpCount = 0; // Track number of jumps
-    private bool wasGrounded; // Track previous grounded state
     
     private Vector3 startPosition;
     
@@ -123,7 +119,6 @@ public class PlayerController : MonoBehaviour
     {
         RaycastHit hit;
         // Check for ground using tag instead of layer
-        wasGrounded = isGrounded;
         isGrounded = Physics.Raycast(
             transform.position + Vector3.up * 0.1f, 
             Vector3.down, 
@@ -135,13 +130,6 @@ public class PlayerController : MonoBehaviour
         if (isGrounded && hit.collider != null)
         {
             isGrounded = hit.collider.CompareTag("Ground") || hit.collider.name.Contains("Ground");
-        }
-        
-        // Reset jump count when landing
-        if (isGrounded && !wasGrounded)
-        {
-            jumpCount = 0;
-            Debug.Log("Landed - jump count reset");
         }
     }
     
@@ -181,36 +169,19 @@ public class PlayerController : MonoBehaviour
     
     void Jump()
     {
-        Debug.Log($"Jump called - GameActive: {GameManager.Instance?.IsGameActive}, isGrounded: {isGrounded}, jumpCount: {jumpCount}/{maxJumps}, isSliding: {isSliding}");
+        Debug.Log($"Jump called - GameActive: {GameManager.Instance?.IsGameActive}, isGrounded: {isGrounded}, isSliding: {isSliding}");
         
         if (!GameManager.Instance.IsGameActive || isSliding) return;
         
-        // Check if we can jump
-        bool canJump = false;
-        
+        // Only jump if grounded
         if (isGrounded)
-        {
-            // Ground jump
-            canJump = true;
-            jumpCount = 0; // Reset when on ground
-        }
-        else if (jumpCount < maxJumps)
-        {
-            // Air jump (double jump)
-            canJump = true;
-        }
-        
-        if (canJump)
         {
             // Reset vertical velocity for consistent jumps
             rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
             
             // Apply jump force
-            float force = (jumpCount == 0) ? jumpForce : doubleJumpForce;
-            rb.AddForce(Vector3.up * force, ForceMode.Impulse);
-            
-            jumpCount++;
-            Debug.Log($"Jump #{jumpCount} executed! (Force: {force})");
+            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            Debug.Log("Player jumped!");
             
             // Reset combo on successful action
             if (GameManager.Instance != null)
@@ -220,7 +191,7 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
-            Debug.Log($"Cannot jump - already used {jumpCount} jumps");
+            Debug.Log("Cannot jump - not grounded");
         }
     }
     
