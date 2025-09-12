@@ -29,6 +29,11 @@ public class Ball : MonoBehaviour
         if (player != null)
         {
             playerTransform = player.transform;
+            Debug.Log($"Ball found player: {player.name}");
+        }
+        else
+        {
+            Debug.LogWarning("Ball could not find player with 'Player' tag");
         }
         
         startPosition = transform.position;
@@ -81,7 +86,23 @@ public class Ball : MonoBehaviour
     
     void Update()
     {
-        if (playerTransform == null) return;
+        // Find player if not found yet
+        if (playerTransform == null)
+        {
+            GameObject player = GameObject.FindWithTag("Player");
+            if (player == null)
+            {
+                player = FindObjectOfType<PlayerController>()?.gameObject;
+            }
+            if (player != null)
+            {
+                playerTransform = player.transform;
+            }
+            else
+            {
+                return; // Still no player found
+            }
+        }
         
         // Boomerang behavior
         if (!isReturning)

@@ -7,6 +7,7 @@ public class ShootingSystem : MonoBehaviour
     public Transform shootPoint;
     public float ballSpeed = 15f;
     public float ballLifetime = 5f; // Increased for boomerang return
+    public float shotCooldown = 0.3f; // Cooldown between shots
     public float chargedShotMultiplier = 2f;
     public float autoTargetRange = 10f;
     public LayerMask obstacleLayer = 1;
@@ -17,6 +18,7 @@ public class ShootingSystem : MonoBehaviour
     public int maxChargedTargets = 3;
     
     private Transform playerTransform;
+    private float lastShotTime = -1f; // Track last shot time
     
     void Start()
     {
@@ -41,11 +43,19 @@ public class ShootingSystem : MonoBehaviour
             return;
         }
         
+        // Check cooldown
+        if (Time.time - lastShotTime < shotCooldown)
+        {
+            Debug.Log($"Shot on cooldown - {shotCooldown - (Time.time - lastShotTime):F1}s remaining");
+            return;
+        }
+        
         // Always shoot forward relative to player's forward direction
         Vector3 shootDirection = transform.forward;
         
         Debug.Log($"Creating ball, direction: {shootDirection}");
         CreateBall(shootDirection, ballSpeed, false);
+        lastShotTime = Time.time;
     }
     
     public void ChargedShot()
@@ -57,9 +67,18 @@ public class ShootingSystem : MonoBehaviour
             return;
         }
         
+        // Check cooldown (charged shots have longer cooldown)
+        float chargedCooldown = shotCooldown * 2f;
+        if (Time.time - lastShotTime < chargedCooldown)
+        {
+            Debug.Log($"Charged shot on cooldown - {chargedCooldown - (Time.time - lastShotTime):F1}s remaining");
+            return;
+        }
+        
         // Always shoot forward with charged power
         Vector3 shootDirection = transform.forward;
         CreateBall(shootDirection, chargedShotForce, true);
+        lastShotTime = Time.time;
     }
     
     void CreateBall(Vector3 direction, float speed, bool isChargedShot)
