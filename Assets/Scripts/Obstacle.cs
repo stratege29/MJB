@@ -244,17 +244,30 @@ public class Obstacle : MonoBehaviour
         if (other.CompareTag("Ball"))
         {
             Ball ball = other.GetComponent<Ball>();
-            if (ball != null && canBeDestroyed)
+            if (ball != null)
             {
-                DestroyObstacle();
+                // The ball will handle damage calculation and destruction
+                // This method is called but the actual logic is in Ball.HitObstacle()
+                Debug.Log($"Ball hit {obstacleType} obstacle with {currentHealth} health");
             }
         }
     }
     
-    // Visual indicator for destroyable obstacles
+    // Visual indicator for obstacle types
     void OnDrawGizmos()
     {
-        Gizmos.color = canBeDestroyed ? Color.red : Color.gray;
+        switch (obstacleType)
+        {
+            case ObstacleType.Weak:
+                Gizmos.color = Color.green;
+                break;
+            case ObstacleType.Strong:
+                Gizmos.color = Color.red;
+                break;
+            case ObstacleType.Reinforced:
+                Gizmos.color = new Color(0.5f, 0f, 1f); // Purple
+                break;
+        }
         Gizmos.DrawWireCube(transform.position, transform.localScale);
     }
 }

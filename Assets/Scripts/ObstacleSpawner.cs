@@ -134,7 +134,7 @@ public class ObstacleSpawner : MonoBehaviour
             obstacleComponent = obstacle.AddComponent<Obstacle>();
         }
         
-        obstacleComponent.canBeDestroyed = obstacleType.canBeDestroyed;
+        // No need to set canBeDestroyed - obstacle type is set in CreateDefaultObstacle
     }
     
     void CreateDefaultObstacle(Vector3 position, ObstacleType obstacleType)
