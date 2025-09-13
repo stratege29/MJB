@@ -17,11 +17,18 @@ public class ShootingSystem : MonoBehaviour
     public int maxChargedTargets = 3;
     
     private Transform playerTransform;
+    private PlayerController playerController; // Pour accéder à la lane
     private GameObject activeBall; // Track current active ball
     
     void Start()
     {
         playerTransform = transform;
+        playerController = GetComponent<PlayerController>();
+        
+        if (playerController == null)
+        {
+            Debug.LogError("ShootingSystem: PlayerController non trouvé!");
+        }
         
         // If no shoot point is assigned, create one in front of player
         if (shootPoint == null)
@@ -104,7 +111,10 @@ public class ShootingSystem : MonoBehaviour
             ballScript = ball.AddComponent<Ball>();
         }
         
-        ballScript.Initialize(ballLifetime, isChargedShot ? chargedShotRadius : 0f);
+        // Obtenir la lane actuelle du joueur
+        int currentPlayerLane = playerController != null ? playerController.CurrentLane : 0;
+        
+        ballScript.Initialize(ballLifetime, isChargedShot ? chargedShotRadius : 0f, currentPlayerLane);
         ballScript.SetSpeed(speed);
         
         // Clear reference when ball is destroyed

@@ -77,52 +77,99 @@ public class UnityEventInputManager : MonoBehaviour
             }
         }
         
-        // Handle keyboard input (Legacy Input System - safe in Unity 6)
-        // TEMPORARILY DISABLED: HandleKeyboardInput(); // Causing Input System conflicts
-        // Unity may need restart to switch input modes properly
+        // Handle keyboard input - with Input System conflict protection
+        if (CanUseLegacyInput())
+        {
+            HandleKeyboardInput();
+        }
+    }
+    
+    private static bool? legacyInputAvailable = null; // Cache pour éviter tests répétés
+    
+    bool CanUseLegacyInput()
+    {
+        // Retourne le résultat mis en cache si déjà testé
+        if (legacyInputAvailable.HasValue)
+        {
+            return legacyInputAvailable.Value;
+        }
+        
+        try
+        {
+            // Test simple mais robuste pour Legacy Input
+            bool testInput = UnityEngine.Input.inputString != null;
+            // Si on arrive ici, Legacy Input fonctionne
+            legacyInputAvailable = true;
+            Debug.Log("✅ Legacy Input disponible - contrôles clavier activés");
+            return true;
+        }
+        catch (System.InvalidOperationException)
+        {
+            legacyInputAvailable = false;
+            Debug.LogWarning("⚠️ Input System conflict - contrôles clavier désactivés. Utilisez GUI ou boutons de test.");
+            return false;
+        }
+        catch (System.Exception e)
+        {
+            legacyInputAvailable = false;
+            Debug.LogWarning($"⚠️ Erreur input inattendue: {e.Message}");
+            return false;
+        }
     }
     
     void HandleKeyboardInput()
     {
-        // Movement controls
+        // Movement controls - avec debug pour tests
         if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow))
         {
             TriggerMoveLeft();
+            Debug.Log("🎮 CLAVIER: Déplacer gauche (A/←)");
         }
         
         if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow))
         {
             TriggerMoveRight();
+            Debug.Log("🎮 CLAVIER: Déplacer droite (D/→)");
         }
         
-        // Action controls
+        // Action controls - avec debug pour tests
         if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
         {
             TriggerJump();
+            Debug.Log("🎮 CLAVIER: Saut (W/↑)");
         }
         
         if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow))
         {
             TriggerSlide();
+            Debug.Log("🎮 CLAVIER: Glisser (S/↓)");
         }
         
-        // Shooting controls
+        // Shooting controls - améliorés pour cohérence avec GUI
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            TriggerShoot();
+            if (!isCharging)
+            {
+                // Tir simple immédiat si pas en train de charger
+                TriggerShoot();
+                Debug.Log("🎮 CLAVIER: Tir simple (Espace)");
+            }
         }
         
-        // Charged shot (hold Space for longer than 0.3 seconds)
+        // Charged shot - gestion améliorée du maintien
         if (Input.GetKey(KeyCode.Space))
         {
             if (!isCharging)
             {
                 StartChargedShoot();
+                Debug.Log("🎮 CLAVIER: Début charge tir (maintenir Espace)");
             }
         }
         else if (isCharging)
         {
+            // Relâcher la touche = exécuter le tir chargé
             PerformChargedShoot();
+            Debug.Log("🎮 CLAVIER: Tir chargé exécuté (relâcher Espace)");
         }
     }
     
@@ -270,17 +317,25 @@ public class UnityEventInputManager : MonoBehaviour
                 TriggerShoot();
             }
             
-            if (GUILayout.RepeatButton("HOLD FOR CHARGED", buttonStyle))
+            Rect chargeButtonRect = GUILayoutUtility.GetRect(new GUIContent("HOLD FOR CHARGED"), buttonStyle);
+            
+            // Handle mouse events for hold-to-charge
+            if (Event.current.type == EventType.MouseDown && chargeButtonRect.Contains(Event.current.mousePosition))
             {
                 if (!isCharging)
                 {
                     StartChargedShoot();
+                    Event.current.Use();
                 }
             }
-            else if (isCharging)
+            else if (Event.current.type == EventType.MouseUp && isCharging)
             {
                 PerformChargedShoot();
+                Event.current.Use();
             }
+            
+            // Visual button state
+            GUI.Button(chargeButtonRect, isCharging ? "CHARGING..." : "HOLD FOR CHARGED", buttonStyle);
             
             GUILayout.Space(8);
             
@@ -369,13 +424,106 @@ public class UnityEventInputManager : MonoBehaviour
             
             GUILayout.Space(8);
             GUILayout.Label("CONTROLS:", labelStyle);
-            GUILayout.Label("• Click buttons above", labelStyle);
-            GUILayout.Label("• GUI controls only", labelStyle);
-            GUILayout.Label("• No Input System conflicts!", labelStyle);
+            GUILayout.Label("• GUI: Click buttons above", labelStyle);
+            
+            // Show keyboard status
+            if (CanUseLegacyInput())
+            {
+                GUILayout.Label("• CLAVIER: A/D = lanes, W/S = saut/glisser", labelStyle);
+                GUILayout.Label("• ESPACE: tir simple ou maintenu = chargé", labelStyle);
+                GUILayout.Label("✅ Contrôles clavier actifs!", labelStyle);
+            }
+            else
+            {
+                GUILayout.Label("⚠️ Contrôles clavier indisponibles", labelStyle);
+                GUILayout.Label("→ Redémarrez Unity après config", labelStyle);
+                GUILayout.Label("→ Boutons TEST disponibles →", labelStyle);
+            }
             GUILayout.Label("Unity 6 Compatible!", labelStyle);
         }
         
         GUILayout.EndArea();
+        
+        // Boutons de test flottants si Legacy Input indisponible
+        if (!CanUseLegacyInput())
+        {
+            DrawTestingButtons();
+        }
+    }
+    
+    void DrawTestingButtons()
+    {
+        // Position des boutons de test à droite de l'écran
+        float buttonSize = 60f;
+        float spacing = 10f;
+        float rightMargin = 10f;
+        float startX = Screen.width - buttonSize - rightMargin;
+        float startY = 100f;
+        
+        GUIStyle testButtonStyle = new GUIStyle(GUI.skin.button);
+        testButtonStyle.fontSize = 18;
+        testButtonStyle.fontStyle = FontStyle.Bold;
+        
+        // Titre des contrôles de test
+        Rect titleRect = new Rect(startX - 50, startY - 30, buttonSize + 100, 25);
+        GUI.Label(titleRect, "CONTRÔLES TEST", new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold });
+        
+        // Boutons de déplacement
+        Rect leftButtonRect = new Rect(startX - 35, startY, buttonSize, buttonSize);
+        Rect rightButtonRect = new Rect(startX + 35, startY, buttonSize, buttonSize);
+        
+        if (GUI.Button(leftButtonRect, "A\n←", testButtonStyle))
+        {
+            TriggerMoveLeft();
+        }
+        
+        if (GUI.Button(rightButtonRect, "D\n→", testButtonStyle))
+        {
+            TriggerMoveRight();
+        }
+        
+        // Boutons d'action
+        float actionY = startY + buttonSize + spacing;
+        Rect jumpButtonRect = new Rect(startX, actionY, buttonSize, buttonSize);
+        Rect slideButtonRect = new Rect(startX, actionY + buttonSize + spacing, buttonSize, buttonSize);
+        
+        if (GUI.Button(jumpButtonRect, "W\n↑\nSAUT", testButtonStyle))
+        {
+            TriggerJump();
+        }
+        
+        if (GUI.Button(slideButtonRect, "S\n↓\nGLISS", testButtonStyle))
+        {
+            TriggerSlide();
+        }
+        
+        // Boutons de tir
+        float shootY = actionY + (buttonSize + spacing) * 2;
+        Rect shootButtonRect = new Rect(startX, shootY, buttonSize, buttonSize);
+        Rect chargeButtonRect = new Rect(startX, shootY + buttonSize + spacing, buttonSize, buttonSize * 1.2f);
+        
+        if (GUI.Button(shootButtonRect, "TIR\nSIMPLE", testButtonStyle))
+        {
+            TriggerShoot();
+        }
+        
+        // Bouton de charge avec détection MouseDown/Up
+        if (Event.current.type == EventType.MouseDown && chargeButtonRect.Contains(Event.current.mousePosition))
+        {
+            if (!isCharging)
+            {
+                StartChargedShoot();
+                Event.current.Use();
+            }
+        }
+        else if (Event.current.type == EventType.MouseUp && isCharging)
+        {
+            PerformChargedShoot();
+            Event.current.Use();
+        }
+        
+        string chargeText = isCharging ? "CHARGE\n..." : "TIR\nCHARGÉ";
+        GUI.Button(chargeButtonRect, chargeText, testButtonStyle);
     }
     
     bool ValidateScreenDimensions()

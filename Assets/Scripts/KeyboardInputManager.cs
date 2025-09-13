@@ -31,8 +31,17 @@ public class KeyboardInputManager : MonoBehaviour
     
     void Update()
     {
-        // Handle keyboard input - safe and doesn't conflict with Input System
-        HandleKeyboardInput();
+        // Réactivé après configuration Legacy Input dans ProjectSettings
+        try
+        {
+            HandleKeyboardInput();
+        }
+        catch (System.InvalidOperationException e)
+        {
+            Debug.LogWarning($"⚠️ KeyboardInputManager: Input System conflit détecté: {e.Message}");
+            // Désactive automatiquement ce component pour éviter spam d'erreurs
+            this.enabled = false;
+        }
     }
     
     void HandleKeyboardInput()

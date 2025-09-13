@@ -31,6 +31,7 @@ PlayerSettings:
   enableNativePlatformBackendsForNewInputSystem: 0
   disableOldInputManagerSupport: 0
   activeInputHandler: 0
+  legacyInputManagerEnabled: 1
   legacyClampBlendShapeWeights: 0
   virtualTexturingSupportEnabled: 0
   insecureHttpOption: 0

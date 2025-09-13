@@ -131,6 +131,14 @@ public class SceneBootstrapper : MonoBehaviour
             Debug.Log("✓ Created UnityEventInputManager (Zero Input System conflicts)");
         }
         
+        // KeyboardInputManager as fallback for testing
+        if (FindObjectOfType<KeyboardInputManager>() == null)
+        {
+            GameObject keyboardManager = new GameObject("KeyboardInputManager");
+            var keyboardInput = keyboardManager.AddComponent<KeyboardInputManager>();
+            Debug.Log("✓ Created KeyboardInputManager as testing fallback");
+        }
+        
         // UIManager
         if (FindObjectOfType<UIManager>() == null)
         {

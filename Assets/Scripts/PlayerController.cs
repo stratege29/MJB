@@ -18,9 +18,13 @@ public class PlayerController : MonoBehaviour
     private Rigidbody rb;
     private CapsuleCollider capsuleCollider;
     private UnityEventInputManager inputManager;
+    private KeyboardInputManager keyboardInputManager;
     private ShootingSystem shootingSystem;
     
     private int currentLane = 0; // -1 = left, 0 = center, 1 = right
+    
+    // Propriété publique pour accéder à la lane
+    public int CurrentLane => currentLane;
     private Vector3 targetPosition;
     private bool isGrounded;
     private bool wasGrounded;
@@ -40,6 +44,7 @@ public class PlayerController : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         capsuleCollider = GetComponent<CapsuleCollider>();
         inputManager = FindObjectOfType<UnityEventInputManager>();
+        keyboardInputManager = FindObjectOfType<KeyboardInputManager>();
         shootingSystem = GetComponent<ShootingSystem>();
         jumpsRemaining = maxJumps;
         
@@ -50,7 +55,7 @@ public class PlayerController : MonoBehaviour
         originalHeight = capsuleCollider.height;
         originalCenterY = capsuleCollider.center.y;
         
-        // Subscribe to input events
+        // Subscribe to input events from both managers
         if (inputManager != null)
         {
             inputManager.OnSwipeLeft += MoveLeft;
@@ -59,11 +64,23 @@ public class PlayerController : MonoBehaviour
             inputManager.OnSwipeDown += StartSlide;
             inputManager.OnTap += Shoot;
             inputManager.OnTapHold += ChargedShoot;
-            Debug.Log("✓ PlayerController subscribed to input events");
+            Debug.Log("✓ PlayerController subscribed to GUI input events");
         }
-        else
+        
+        if (keyboardInputManager != null)
         {
-            Debug.LogError("× UnityEventInputManager not found! Controls will not work.");
+            keyboardInputManager.OnSwipeLeft += MoveLeft;
+            keyboardInputManager.OnSwipeRight += MoveRight;
+            keyboardInputManager.OnSwipeUp += Jump;
+            keyboardInputManager.OnSwipeDown += StartSlide;
+            keyboardInputManager.OnTap += Shoot;
+            keyboardInputManager.OnTapHold += ChargedShoot;
+            Debug.Log("✓ PlayerController subscribed to keyboard input events");
+        }
+        
+        if (inputManager == null && keyboardInputManager == null)
+        {
+            Debug.LogError("× Aucun gestionnaire d'input trouvé! Les contrôles ne fonctionneront pas.");
         }
         
         // Subscribe to game state changes
@@ -81,6 +98,16 @@ public class PlayerController : MonoBehaviour
             inputManager.OnSwipeDown -= StartSlide;
             inputManager.OnTap -= Shoot;
             inputManager.OnTapHold -= ChargedShoot;
+        }
+        
+        if (keyboardInputManager != null)
+        {
+            keyboardInputManager.OnSwipeLeft -= MoveLeft;
+            keyboardInputManager.OnSwipeRight -= MoveRight;
+            keyboardInputManager.OnSwipeUp -= Jump;
+            keyboardInputManager.OnSwipeDown -= StartSlide;
+            keyboardInputManager.OnTap -= Shoot;
+            keyboardInputManager.OnTapHold -= ChargedShoot;
         }
         
         GameManager.OnGameStateChanged -= OnGameStateChanged;
