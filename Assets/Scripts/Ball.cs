@@ -7,33 +7,58 @@ public class Ball : MonoBehaviour
     public float explosionRadius = 0f;
     public bool isChargedShot = false;
     
+    [Header("Physics Settings")]
+    public float launchForce = 30f; // 2x player max speed
+    public float acceleration = 8f; // 4x faster acceleration
+    public float maxSpeed = 35f; // Higher than player max speed
+    public float drag = 0.1f;
+    public AnimationCurve speedCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+    
     [Header("Boomerang Settings")]
     public float maxDistance = 10f;
-    public float returnSpeed = 20f;
+    public float returnForce = 20f;
     public bool isReturning = false;
     
-    [Header("Auto-Aim Settings")]
-    public float aimRange = 20f; // Portée étendue pour détection précoce
-    public float maxAimAngle = 75f; // Augmenté pour angles descendants marqués
-    public float aimSpeed = 5f; // Base plus rapide pour réactivité
-    public float closeRangeSpeed = 10f; // Vitesse pour obstacles proches
+    [Header("Smooth Auto-Aim Settings")]
+    public float aimRange = 20f;
+    public float maxAimAngle = 75f;
+    public float aimSmoothing = 8f; // Smooth interpolation factor
+    public float targetPrediction = 0.5f; // Predict target movement
     public LayerMask obstacleLayerMask = -1;
     
     [Header("Lane System")]
-    public float laneDistance = 2f; // Distance entre les lanes
-    public float laneTolerance = 1.0f; // Tolérance augmentée pour détection
+    public float laneDistance = 2f;
+    public float laneTolerance = 1.0f;
     
     private float lifetime;
     private bool hasExploded = false;
     private Transform playerTransform;
     private Vector3 startPosition;
-    private Vector3 forwardDirection;
-    private Vector3 currentDirection; // Current movement direction (can change for auto-aim)
+    private Vector3 targetDirection;
+    private Vector3 currentVelocity;
+    private float currentSpeed = 0f;
     private float travelDistance = 0f;
+    private float launchTime;
+    
     private ShootingSystem shootingSystem;
-    private GameObject currentTarget; // Currently targeted obstacle
-    private List<GameObject> obstaclesInLane = new List<GameObject>(); // NOUVEAU: Tous les obstacles de la lane
-    private int shootingLane; // Lane du joueur au moment du tir (-1, 0, 1)
+    private Rigidbody ballRigidbody;
+    
+    // Auto-aim system
+    private GameObject currentTarget;
+    private Vector3 predictedTargetPosition;
+    private float lastTargetUpdateTime;
+    private float targetUpdateInterval = 0.1f; // Update targeting every 0.1 seconds for performance
+    
+    // Lane system
+    private int shootingLane;
+    private List<GameObject> cachedObstacles = new List<GameObject>();
+    
+    // Missing variables that need to be declared
+    private Vector3 currentDirection;
+    private Vector3 forwardDirection;
+    private List<GameObject> obstaclesInLane = new List<GameObject>();
+    private float aimSpeed = 5f;
+    private float closeRangeSpeed = 10f;
     
     public void Initialize(float ballLifetime, float chargedRadius, int playerLane)
     {
@@ -41,56 +66,91 @@ public class Ball : MonoBehaviour
         explosionRadius = chargedRadius;
         isChargedShot = explosionRadius > 0f;
         shootingLane = playerLane;
+        launchTime = Time.time;
         
-        Debug.Log($"🎯 Balle initialisée - Lane: {shootingLane}, Chargée: {isChargedShot}");
+        Debug.Log($"🎯 Ball initialized - Lane: {shootingLane}, Charged: {isChargedShot}");
         
-        // Find the player for return trajectory
+        // Find player and shooting system
         GameObject player = GameObject.FindWithTag("Player");
         if (player != null)
         {
             playerTransform = player.transform;
             shootingSystem = player.GetComponent<ShootingSystem>();
-            Debug.Log($"Ball found player: {player.name}");
         }
         else
         {
             Debug.LogWarning("Ball could not find player with 'Player' tag");
         }
         
+        // Initialize physics
+        ballRigidbody = GetComponent<Rigidbody>();
+        if (ballRigidbody == null)
+        {
+            ballRigidbody = gameObject.AddComponent<Rigidbody>();
+        }
+        
+        // Configure rigidbody for smooth physics
+        ballRigidbody.useGravity = false;
+        ballRigidbody.isKinematic = false; // Use physics for smooth movement
+        ballRigidbody.linearDamping = drag;
+        ballRigidbody.mass = isChargedShot ? 2f : 1f;
+        
+        // Set initial values
         startPosition = transform.position;
+        targetDirection = transform.forward;
+        currentDirection = transform.forward;
         forwardDirection = transform.forward;
-        currentDirection = forwardDirection; // Initialize current direction
+        currentVelocity = targetDirection * launchForce;
         maxDistance = isChargedShot ? 15f : 10f;
         
-        // NOUVEAU: Scanner immédiatement pour orienter vers le premier obstacle
-        StartCoroutine(InitialTargetScan());
+        // Launch the ball with initial force
+        Launch();
         
-        // Ensure the ball has a collider avec rayon élargi pour capture maximale
-        if (GetComponent<Collider>() == null)
-        {
-            SphereCollider sphereCollider = gameObject.AddComponent<SphereCollider>();
-            sphereCollider.isTrigger = true;
-            sphereCollider.radius = 0.4f; // Augmenté de 0.1f à 0.4f pour capturer plus d'obstacles
-        }
-        else
-        {
-            // Ajuster le collider existant
-            SphereCollider existingCollider = GetComponent<SphereCollider>();
-            if (existingCollider != null && existingCollider.radius < 0.4f)
-            {
-                existingCollider.radius = 0.4f;
-                Debug.Log("🎯 Collider balle élargi pour capture maximale");
-            }
-        }
+        // Setup collision detection
+        SetupCollider();
         
-        // Add visual component if missing
+        // Setup visual components
         if (GetComponent<MeshRenderer>() == null)
         {
             SetupVisuals();
         }
         
-        // Configure trail for shot type
         SetupTrail();
+        
+        // Initialize targeting system
+        StartCoroutine(InitializeTargeting());
+    }
+    
+    void Launch()
+    {
+        // Apply initial launch force
+        float initialForce = isChargedShot ? launchForce * 1.5f : launchForce;
+        ballRigidbody.linearVelocity = targetDirection * initialForce;
+        currentSpeed = initialForce;
+        
+        Debug.Log($"⚽ Ball launched with force: {initialForce}, direction: {targetDirection}");
+    }
+    
+    void SetupCollider()
+    {
+        SphereCollider sphereCollider = GetComponent<SphereCollider>();
+        if (sphereCollider == null)
+        {
+            sphereCollider = gameObject.AddComponent<SphereCollider>();
+        }
+        
+        sphereCollider.isTrigger = true;
+        sphereCollider.radius = isChargedShot ? 0.5f : 0.3f; // Larger for charged shots
+    }
+    
+    System.Collections.IEnumerator InitializeTargeting()
+    {
+        // Wait one frame for physics to settle
+        yield return null;
+        
+        // Initial target scan
+        UpdateTargeting();
+        lastTargetUpdateTime = Time.time;
     }
     
     void SetupVisuals()
@@ -177,6 +237,7 @@ public class Ball : MonoBehaviour
             if (player != null)
             {
                 playerTransform = player.transform;
+                shootingSystem = player.GetComponent<ShootingSystem>();
             }
             else
             {
@@ -184,46 +245,213 @@ public class Ball : MonoBehaviour
             }
         }
         
-        // Boomerang behavior with auto-aim
+        // Check lifetime and destroy if expired
+        lifetime -= Time.deltaTime;
+        if (lifetime <= 0f && !isReturning)
+        {
+            DestroyBall();
+            return;
+        }
+        
         if (!isReturning)
         {
-            // Update auto-aim targeting
-            UpdateAutoAim();
+            // Update physics-based movement
+            UpdatePhysicsMovement();
             
-            // Move in current direction (which may be adjusted by auto-aim)
-            transform.position += currentDirection * ballSpeed * Time.deltaTime;
-            travelDistance += ballSpeed * Time.deltaTime;
+            // Update targeting system (performance optimized)
+            if (Time.time - lastTargetUpdateTime >= targetUpdateInterval)
+            {
+                UpdateTargeting();
+                lastTargetUpdateTime = Time.time;
+            }
+            
+            // Apply auto-aim force smoothly
+            ApplyAutoAim();
+            
+            // Track travel distance
+            travelDistance += ballRigidbody.linearVelocity.magnitude * Time.deltaTime;
             
             // Start returning when max distance reached
             if (travelDistance >= maxDistance)
             {
-                isReturning = true;
-                currentTarget = null; // Clear target when returning
+                StartReturn();
             }
         }
         else
         {
-            // Return to player
-            Vector3 directionToPlayer = (playerTransform.position + Vector3.up - transform.position).normalized;
-            transform.position += directionToPlayer * returnSpeed * Time.deltaTime;
-            
-            // Check if close to player
-            if (Vector3.Distance(transform.position, playerTransform.position) < 1f)
-            {
-                DestroyBall();
-            }
+            // Return to player with smooth physics
+            ReturnToPlayer();
         }
         
-        // Rotate the ball for visual effect - charged shots spin faster
-        float rotationSpeed = isChargedShot ? 720f : 360f;
-        transform.Rotate(Vector3.up * rotationSpeed * Time.deltaTime);
+        // Smooth visual rotation
+        RotateBall();
     }
     
-    private float ballSpeed = 15f; // Default speed
+    private float ballSpeed = 15f; // Default speed (kept for compatibility)
     
     public void SetSpeed(float speed)
     {
         ballSpeed = speed;
+        launchForce = speed; // Update launch force as well
+    }
+    
+    void UpdatePhysicsMovement()
+    {
+        // Apply acceleration over time using animation curve - much faster now
+        float timeSinceLaunch = Time.time - launchTime;
+        float normalizedTime = Mathf.Clamp01(timeSinceLaunch / 0.5f); // 0.5 seconds to reach max speed
+        float targetSpeed = speedCurve.Evaluate(normalizedTime) * maxSpeed;
+        
+        // Smoothly adjust speed with higher acceleration
+        currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, acceleration * Time.deltaTime);
+        
+        // Maintain forward momentum
+        Vector3 currentDir = ballRigidbody.linearVelocity.normalized;
+        if (currentDir != Vector3.zero)
+        {
+            ballRigidbody.linearVelocity = currentDir * currentSpeed;
+        }
+    }
+    
+    void UpdateTargeting()
+    {
+        if (currentTarget == null || !IsTargetValid(currentTarget))
+        {
+            FindNewTarget();
+        }
+        
+        if (currentTarget != null)
+        {
+            PredictTargetPosition();
+        }
+    }
+    
+    void ApplyAutoAim()
+    {
+        if (currentTarget == null || predictedTargetPosition == Vector3.zero) return;
+        
+        Vector3 directionToTarget = (predictedTargetPosition - transform.position).normalized;
+        Vector3 currentVelocityDir = ballRigidbody.linearVelocity.normalized;
+        
+        // Calculate angle to target
+        float angleToTarget = Vector3.Angle(currentVelocityDir, directionToTarget);
+        
+        if (angleToTarget <= maxAimAngle)
+        {
+            // Smooth steering towards target
+            Vector3 steerForce = Vector3.Slerp(currentVelocityDir, directionToTarget, aimSmoothing * Time.deltaTime);
+            ballRigidbody.linearVelocity = steerForce * ballRigidbody.linearVelocity.magnitude;
+            
+            Debug.Log($"🎯 Auto-aiming towards {currentTarget.name}, angle: {angleToTarget:F1}°");
+        }
+    }
+    
+    void StartReturn()
+    {
+        isReturning = true;
+        currentTarget = null;
+        Debug.Log("⚽ Ball starting return journey");
+        
+        // Add some upward arc for visual appeal
+        Vector3 returnDirection = playerTransform != null ? 
+            (playerTransform.position - transform.position).normalized : 
+            -targetDirection;
+        
+        returnDirection.y += 0.3f; // Add slight upward arc
+        ballRigidbody.linearVelocity = returnDirection.normalized * returnForce;
+    }
+    
+    void ReturnToPlayer()
+    {
+        if (playerTransform == null) return;
+        
+        Vector3 directionToPlayer = (playerTransform.position + Vector3.up - transform.position).normalized;
+        
+        // Apply return force smoothly
+        ballRigidbody.linearVelocity = Vector3.Lerp(ballRigidbody.linearVelocity, directionToPlayer * returnForce, 5f * Time.deltaTime);
+        
+        // Check if close enough to player to be caught
+        if (Vector3.Distance(transform.position, playerTransform.position) < 1.5f)
+        {
+            DestroyBall();
+        }
+    }
+    
+    void RotateBall()
+    {
+        // Visual rotation based on velocity
+        float rotationSpeed = isChargedShot ? 1080f : 720f;
+        float velocityMagnitude = ballRigidbody.linearVelocity.magnitude;
+        float normalizedSpeed = Mathf.Clamp01(velocityMagnitude / maxSpeed);
+        
+        transform.Rotate(Vector3.up * rotationSpeed * normalizedSpeed * Time.deltaTime);
+    }
+    
+    bool IsTargetValid(GameObject target)
+    {
+        if (target == null) return false;
+        
+        // Check if target is still in the same lane
+        float targetLaneX = target.transform.position.x;
+        float expectedLaneX = shootingLane * laneDistance;
+        
+        return Mathf.Abs(targetLaneX - expectedLaneX) <= laneTolerance;
+    }
+    
+    void FindNewTarget()
+    {
+        // Clear previous target
+        currentTarget = null;
+        cachedObstacles.Clear();
+        
+        // Find obstacles in sphere around ball
+        Collider[] obstacles = Physics.OverlapSphere(transform.position, aimRange, obstacleLayerMask);
+        
+        foreach (Collider obstacle in obstacles)
+        {
+            if (obstacle.CompareTag("Obstacle") && IsInCorrectLane(obstacle.gameObject))
+            {
+                cachedObstacles.Add(obstacle.gameObject);
+            }
+        }
+        
+        // Sort by distance and pick closest
+        if (cachedObstacles.Count > 0)
+        {
+            cachedObstacles.Sort((a, b) => 
+            {
+                float distA = Vector3.Distance(transform.position, a.transform.position);
+                float distB = Vector3.Distance(transform.position, b.transform.position);
+                return distA.CompareTo(distB);
+            });
+            
+            currentTarget = cachedObstacles[0];
+            Debug.Log($"🎯 New target acquired: {currentTarget.name}");
+        }
+    }
+    
+    bool IsInCorrectLane(GameObject obstacle)
+    {
+        float obstacleLaneX = obstacle.transform.position.x;
+        float expectedLaneX = shootingLane * laneDistance;
+        
+        return Mathf.Abs(obstacleLaneX - expectedLaneX) <= laneTolerance;
+    }
+    
+    void PredictTargetPosition()
+    {
+        if (currentTarget == null) return;
+        
+        // For static obstacles, prediction is just the current position
+        predictedTargetPosition = currentTarget.transform.position;
+        
+        // For moving obstacles, predict future position
+        Rigidbody targetRb = currentTarget.GetComponent<Rigidbody>();
+        if (targetRb != null && targetRb.linearVelocity.magnitude > 0.1f)
+        {
+            float timeToReach = Vector3.Distance(transform.position, currentTarget.transform.position) / ballRigidbody.linearVelocity.magnitude;
+            predictedTargetPosition += targetRb.linearVelocity * timeToReach * targetPrediction;
+        }
     }
     
     void OnTriggerEnter(Collider other)
@@ -251,6 +479,7 @@ public class Ball : MonoBehaviour
         hasExploded = true;
         
         bool obstacleDestroyed = false;
+        bool shouldBounce = false;
         
         if (isChargedShot && explosionRadius > 0f)
         {
@@ -261,12 +490,8 @@ public class Ball : MonoBehaviour
             {
                 if (obstacle.CompareTag("Obstacle"))
                 {
-                    Obstacle obstacleComponent = obstacle.GetComponent<Obstacle>();
-                    if (obstacleComponent != null)
-                    {
-                        bool destroyed = obstacleComponent.TakeDamage(2, true); // Charged shots do 2 damage
-                        if (destroyed) obstacleDestroyed = true;
-                    }
+                    bool destroyed = DamageObstacle(obstacle.gameObject, 2, true);
+                    if (destroyed) obstacleDestroyed = true;
                 }
             }
             
@@ -276,24 +501,110 @@ public class Ball : MonoBehaviour
         else
         {
             // Regular shot - affect only the hit obstacle
-            Obstacle obstacleComponent = hitObstacle.GetComponent<Obstacle>();
-            if (obstacleComponent != null)
+            bool destroyed = DamageObstacle(hitObstacle.gameObject, 1, false);
+            obstacleDestroyed = destroyed;
+            
+            // Check if we should bounce off this obstacle
+            UrbanObstacle urbanObstacle = hitObstacle.GetComponent<UrbanObstacle>();
+            if (urbanObstacle != null)
             {
-                obstacleDestroyed = obstacleComponent.TakeDamage(1, false); // Normal shots do 1 damage
+                shouldBounce = (urbanObstacle.collisionBehavior == CollisionBehavior.Bouncy || 
+                               urbanObstacle.collisionBehavior == CollisionBehavior.Indestructible);
             }
         }
         
-        // Only destroy ball if we actually destroyed an obstacle or it's a charged shot
+        // Handle post-collision behavior
         if (obstacleDestroyed || isChargedShot)
         {
             DestroyBall();
+        }
+        else if (shouldBounce)
+        {
+            // Ball bounces off certain urban obstacles
+            HandleBounce(hitObstacle);
         }
         else
         {
             // Ball bounces off if it didn't destroy the obstacle
             Debug.Log("Ball bounced off strong obstacle - continuing trajectory");
-            // Could add bounce physics here if desired
         }
+    }
+    
+    bool DamageObstacle(GameObject obstacleObject, int damage, bool isCharged)
+    {
+        // Try UrbanObstacle first (extends Obstacle)
+        UrbanObstacle urbanObstacle = obstacleObject.GetComponent<UrbanObstacle>();
+        if (urbanObstacle != null)
+        {
+            bool destroyed = urbanObstacle.TakeDamage(damage, isCharged);
+            
+            // Trigger special effects for urban obstacles
+            ObstacleEffects effects = obstacleObject.GetComponent<ObstacleEffects>();
+            if (effects != null)
+            {
+                if (destroyed)
+                {
+                    effects.PlayEffect(GetDestructionEffectType(urbanObstacle.urbanType), transform.position);
+                }
+                else
+                {
+                    effects.PlayEffect(EffectType.Impact, transform.position);
+                }
+            }
+            
+            return destroyed;
+        }
+        
+        // Fallback to regular Obstacle
+        Obstacle obstacle = obstacleObject.GetComponent<Obstacle>();
+        if (obstacle != null)
+        {
+            return obstacle.TakeDamage(damage, isCharged);
+        }
+        
+        return false;
+    }
+    
+    EffectType GetDestructionEffectType(UrbanObstacleType urbanType)
+    {
+        switch (urbanType)
+        {
+            case UrbanObstacleType.TrashBin: return EffectType.Plastic;
+            case UrbanObstacleType.StreetSign: return EffectType.Metal;
+            case UrbanObstacleType.VendorCart: return EffectType.Wood;
+            case UrbanObstacleType.FireHydrant: return EffectType.WaterSpray;
+            case UrbanObstacleType.ParkedCar: return EffectType.Metal;
+            case UrbanObstacleType.FlowerPot: return EffectType.Stone;
+            case UrbanObstacleType.ShoppingCart: return EffectType.Metal;
+            case UrbanObstacleType.BusStop: return EffectType.Glass;
+            case UrbanObstacleType.StreetLamp: return EffectType.Glass;
+            case UrbanObstacleType.MarketStall: return EffectType.Fabric;
+            default: return EffectType.Destruction;
+        }
+    }
+    
+    void HandleBounce(Collider hitObstacle)
+    {
+        // Calculate bounce direction
+        Vector3 surfaceNormal = (transform.position - hitObstacle.transform.position).normalized;
+        Vector3 bounceDirection = Vector3.Reflect(currentDirection, surfaceNormal);
+        bounceDirection = bounceDirection.normalized;
+        
+        // Apply bounce
+        Rigidbody ballRb = GetComponent<Rigidbody>();
+        if (ballRb != null)
+        {
+            ballRb.linearVelocity = bounceDirection * 10f; // Bounce speed
+        }
+        
+        // Create bounce visual effect
+        ObstacleEffects effects = hitObstacle.GetComponent<ObstacleEffects>();
+        if (effects != null)
+        {
+            effects.PlayEffect(EffectType.Ricochet, transform.position);
+        }
+        
+        Debug.Log("Ball bounced off urban obstacle!");
     }
     
     void DestroyObstacle(GameObject obstacle)
@@ -507,7 +818,7 @@ public class Ball : MonoBehaviour
         Collider[] obstacles = Physics.OverlapSphere(transform.position, aimRange, obstacleLayerMask);
         GameObject nearest = null;
         float nearestZDistance = float.MaxValue;
-        int obstaclesInLane = 0;
+        int obstacleCount = 0;
         
         foreach (Collider obstacle in obstacles)
         {
@@ -517,7 +828,7 @@ public class Ball : MonoBehaviour
             // NOUVEAU: Filtrer par lane avant tout autre test
             if (!IsObstacleInSameLane(obstacle.gameObject)) continue;
             
-            obstaclesInLane++;
+            obstacleCount++;
             
             // CHANGÉ: Utiliser distance Z (profondeur) au lieu de distance 3D
             // Cela permet de cibler les obstacles hauts/bas sans pénalité
@@ -535,7 +846,7 @@ public class Ball : MonoBehaviour
             }
         }
         
-        if (obstaclesInLane == 0)
+        if (obstacleCount == 0)
         {
             Debug.Log($"🎯 Aucun obstacle trouvé dans la lane {shootingLane}");
         }
@@ -559,6 +870,14 @@ public class Ball : MonoBehaviour
             
             // Filtrer par lane et direction
             if (!IsObstacleInSameLane(obstacle.gameObject)) continue;
+            
+            // Check if this is an avoidable urban obstacle
+            UrbanObstacle urbanObstacle = obstacle.GetComponent<UrbanObstacle>();
+            if (urbanObstacle != null && urbanObstacle.collisionBehavior == CollisionBehavior.Avoidable)
+            {
+                // Skip avoidable obstacles for auto-aim (they will dodge)
+                continue;
+            }
             
             // Vérifier accessibilité avec critères assouplis
             if (!IsObstacleReachable(obstacle.gameObject)) continue;

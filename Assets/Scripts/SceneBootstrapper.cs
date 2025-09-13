@@ -238,35 +238,127 @@ public class SceneBootstrapper : MonoBehaviour
     {
         if (FindObjectOfType<PlayerController>() == null)
         {
-            // Create player capsule
-            GameObject player = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            player.name = "Player";
-            player.transform.position = new Vector3(0, 1f, 0);
-            player.transform.localScale = new Vector3(0.8f, 1f, 0.8f);
-            player.tag = "Player";
+            // Load the 3D character prefab for Mariam
+            GameObject baseMeshPrefab = Resources.Load<GameObject>("ithappy/Creative_Characters_FREE/Prefabs/Base_Mesh");
             
-            // Add Rigidbody
-            Rigidbody rb = player.AddComponent<Rigidbody>();
-            rb.constraints = RigidbodyConstraints.FreezeRotation;
-            rb.mass = 1f;
-            
-            // Add PlayerController
-            PlayerController playerController = player.AddComponent<PlayerController>();
-            
-            // Add ShootingSystem
-            ShootingSystem shootingSystem = player.AddComponent<ShootingSystem>();
-            
-            // Create and assign ball prefab
-            GameObject ballPrefab = CreateBallPrefab();
-            shootingSystem.ballPrefab = ballPrefab;
-            
-            // Set player material (African-inspired colors)
-            Material playerMat = new Material(Shader.Find("Standard"));
-            playerMat.color = new Color(0.4f, 0.2f, 0.1f); // Brown skin tone
-            player.GetComponent<MeshRenderer>().material = playerMat;
-            
-            Debug.Log("✓ Created Player with components");
+            if (baseMeshPrefab != null)
+            {
+                // Instantiate the 3D character
+                GameObject player = Instantiate(baseMeshPrefab);
+                player.name = "Mariam_Player";
+                player.transform.position = new Vector3(0, 0f, 0); // Ground level for 3D character
+                player.transform.localScale = new Vector3(0.9f, 0.9f, 0.9f); // Slightly smaller for young girl
+                player.tag = "Player";
+                
+                // Add necessary collider for gameplay (CapsuleCollider works well for humanoid characters)
+                CapsuleCollider playerCollider = player.AddComponent<CapsuleCollider>();
+                playerCollider.height = 1.8f;
+                playerCollider.radius = 0.3f;
+                playerCollider.center = new Vector3(0, 0.9f, 0); // Center at character's middle
+                
+                // Add Rigidbody
+                Rigidbody rb = player.AddComponent<Rigidbody>();
+                rb.constraints = RigidbodyConstraints.FreezeRotation;
+                rb.mass = 1f;
+                
+                // Add PlayerController
+                PlayerController playerController = player.AddComponent<PlayerController>();
+                
+                // Add ShootingSystem
+                ShootingSystem shootingSystem = player.AddComponent<ShootingSystem>();
+                
+                // Create and assign ball prefab
+                GameObject ballPrefab = CreateBallPrefab();
+                shootingSystem.ballPrefab = ballPrefab;
+                
+                // Customize character appearance for Mariam
+                CustomizeCharacterForMariam(player);
+                
+                Debug.Log("✓ Created Mariam 3D Character with components");
+            }
+            else
+            {
+                // Fallback to capsule if 3D character fails to load
+                Debug.LogWarning("Could not load 3D character, falling back to capsule");
+                CreateFallbackCapsulePlayer();
+            }
         }
+    }
+    
+    void CreateFallbackCapsulePlayer()
+    {
+        // Create player capsule (original implementation)
+        GameObject player = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+        player.name = "Player";
+        player.transform.position = new Vector3(0, 1f, 0);
+        player.transform.localScale = new Vector3(0.8f, 1f, 0.8f);
+        player.tag = "Player";
+        
+        // Add Rigidbody
+        Rigidbody rb = player.AddComponent<Rigidbody>();
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
+        rb.mass = 1f;
+        
+        // Add PlayerController
+        PlayerController playerController = player.AddComponent<PlayerController>();
+        
+        // Add ShootingSystem
+        ShootingSystem shootingSystem = player.AddComponent<ShootingSystem>();
+        
+        // Create and assign ball prefab
+        GameObject ballPrefab = CreateBallPrefab();
+        shootingSystem.ballPrefab = ballPrefab;
+        
+        // Set player material (African-inspired colors)
+        Material playerMat = new Material(Shader.Find("Standard"));
+        playerMat.color = new Color(0.8f, 0.7f, 0.6f); // Sandy/golden tone as discussed
+        player.GetComponent<MeshRenderer>().material = playerMat;
+        
+        Debug.Log("✓ Created Fallback Capsule Player");
+    }
+    
+    void CustomizeCharacterForMariam(GameObject player)
+    {
+        // Try to load and apply sports outfit components
+        GameObject shortsPrefab = Resources.Load<GameObject>("ithappy/Creative_Characters_FREE/Prefabs/Shorts/Shorts_003");
+        GameObject sneakersPrefab = Resources.Load<GameObject>("ithappy/Creative_Characters_FREE/Prefabs/Shoes/Shoe_Sneakers_009");
+        GameObject facePrefab = Resources.Load<GameObject>("ithappy/Creative_Characters_FREE/Prefabs/Faces/Male_emotion_happy_002");
+        
+        if (shortsPrefab != null)
+        {
+            GameObject shorts = Instantiate(shortsPrefab, player.transform);
+            Debug.Log("✓ Added sports shorts to Mariam");
+        }
+        
+        if (sneakersPrefab != null)
+        {
+            GameObject sneakers = Instantiate(sneakersPrefab, player.transform);
+            Debug.Log("✓ Added sneakers to Mariam");
+        }
+        
+        if (facePrefab != null)
+        {
+            GameObject face = Instantiate(facePrefab, player.transform);
+            Debug.Log("✓ Added happy face to Mariam");
+        }
+        
+        // Try to apply colorful, youthful material
+        Material characterMat = Resources.Load<Material>("ithappy/Creative_Characters_FREE/Materials/Color");
+        if (characterMat != null)
+        {
+            // Find all renderers in the character and apply the material
+            MeshRenderer[] renderers = player.GetComponentsInChildren<MeshRenderer>();
+            foreach (MeshRenderer renderer in renderers)
+            {
+                // Create instance of material to avoid affecting the original
+                Material instanceMat = new Material(characterMat);
+                instanceMat.color = new Color(0.9f, 0.7f, 0.5f); // Warm, youthful skin tone
+                renderer.material = instanceMat;
+            }
+            Debug.Log("✓ Applied character material to Mariam");
+        }
+        
+        Debug.Log("✓ Customized character for Mariam - young football enthusiast");
     }
     
     GameObject CreateBallPrefab()

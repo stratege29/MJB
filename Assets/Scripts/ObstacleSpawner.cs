@@ -17,6 +17,9 @@ public class ObstacleSpawner : MonoBehaviour
     [Header("Obstacle Types")]
     public ObstacleType[] obstacleTypes;
     
+    [Header("Urban Obstacle Types")]
+    public UrbanObstacleConfiguration[] urbanObstacleTypes;
+    
     private Transform playerTransform;
     private float nextSpawnTime;
     private float currentSpawnInterval;
@@ -30,6 +33,21 @@ public class ObstacleSpawner : MonoBehaviour
         public float spawnWeight = 1f;
         public bool canBeDestroyed = true;
         public float height = 1f;
+    }
+    
+    [System.Serializable]
+    public class UrbanObstacleConfiguration
+    {
+        public string name;
+        public UrbanObstacleType urbanType;
+        public GameObject prefab;
+        public float spawnWeight = 1f;
+        public Vector3 scale = Vector3.one;
+        public MovementPattern movementPattern = MovementPattern.Static;
+        public CollisionBehavior collisionBehavior = CollisionBehavior.Destroyable;
+        public bool preferredLane = false; // If true, spawns in specific lanes only
+        public int[] allowedLanes = { 0, 1, 2 }; // Which lanes this obstacle can spawn in
+        public int minDifficultyLevel = 0; // Minimum difficulty to spawn this obstacle
     }
     
     void Start()
@@ -51,6 +69,12 @@ public class ObstacleSpawner : MonoBehaviour
         if (obstacleTypes == null || obstacleTypes.Length == 0)
         {
             CreateDefaultObstacleTypes();
+        }
+        
+        // Create default urban obstacle types if none assigned
+        if (urbanObstacleTypes == null || urbanObstacleTypes.Length == 0)
+        {
+            CreateDefaultUrbanObstacleTypes();
         }
         
         // Subscribe to game state changes
@@ -90,6 +114,60 @@ public class ObstacleSpawner : MonoBehaviour
     {
         if (playerTransform == null) return;
         
+        // Decide whether to spawn urban or regular obstacle (80% urban, 20% regular)
+        bool spawnUrban = Random.Range(0f, 1f) < 0.8f;
+        
+        if (spawnUrban && urbanObstacleTypes != null && urbanObstacleTypes.Length > 0)
+        {
+            SpawnUrbanObstacle();
+        }
+        else
+        {
+            SpawnRegularObstacle();
+        }
+    }
+    
+    void SpawnUrbanObstacle()
+    {
+        // Get current difficulty level based on game time
+        int difficultyLevel = GetCurrentDifficultyLevel();
+        
+        // Filter urban obstacles by difficulty
+        var availableObstacles = System.Array.FindAll(urbanObstacleTypes, 
+            o => o.minDifficultyLevel <= difficultyLevel);
+        
+        if (availableObstacles.Length == 0)
+        {
+            // Fallback to regular obstacle
+            SpawnRegularObstacle();
+            return;
+        }
+        
+        // Choose random urban obstacle type
+        UrbanObstacleConfiguration urbanConfig = GetRandomUrbanObstacleType(availableObstacles);
+        
+        // Choose appropriate lane
+        int lane = ChooseLaneForObstacle(urbanConfig);
+        
+        Vector3 spawnPosition = new Vector3(
+            lane * laneDistance,
+            obstacleHeight * 0.5f,
+            playerTransform.position.z + spawnDistance
+        );
+        
+        if (urbanConfig.prefab != null)
+        {
+            GameObject obstacle = Instantiate(urbanConfig.prefab, spawnPosition, Quaternion.identity);
+            SetupUrbanObstacle(obstacle, urbanConfig);
+        }
+        else
+        {
+            CreateDefaultUrbanObstacle(spawnPosition, urbanConfig);
+        }
+    }
+    
+    void SpawnRegularObstacle()
+    {
         // Choose random lane
         int lane = Random.Range(-1, 2); // -1, 0, or 1
         Vector3 spawnPosition = new Vector3(
@@ -194,6 +272,134 @@ public class ObstacleSpawner : MonoBehaviour
         return obstacleTypes[0];
     }
     
+    int GetCurrentDifficultyLevel()
+    {
+        float gameTime = Time.time - gameStartTime;
+        // Increase difficulty every 30 seconds
+        return Mathf.FloorToInt(gameTime / 30f);
+    }
+    
+    UrbanObstacleConfiguration GetRandomUrbanObstacleType(UrbanObstacleConfiguration[] availableObstacles)
+    {
+        if (availableObstacles == null || availableObstacles.Length == 0)
+            return null;
+        
+        float totalWeight = 0f;
+        foreach (var config in availableObstacles)
+        {
+            totalWeight += config.spawnWeight;
+        }
+        
+        float randomValue = Random.Range(0f, totalWeight);
+        float currentWeight = 0f;
+        
+        foreach (var config in availableObstacles)
+        {
+            currentWeight += config.spawnWeight;
+            if (randomValue <= currentWeight)
+            {
+                return config;
+            }
+        }
+        
+        return availableObstacles[0];
+    }
+    
+    int ChooseLaneForObstacle(UrbanObstacleConfiguration config)
+    {
+        if (config.preferredLane && config.allowedLanes != null && config.allowedLanes.Length > 0)
+        {
+            int laneIndex = config.allowedLanes[Random.Range(0, config.allowedLanes.Length)];
+            return laneIndex - 1; // Convert from 0,1,2 to -1,0,1
+        }
+        else
+        {
+            return Random.Range(-1, 2); // -1, 0, or 1
+        }
+    }
+    
+    void SetupUrbanObstacle(GameObject obstacle, UrbanObstacleConfiguration config)
+    {
+        // Ensure proper tag
+        obstacle.tag = "Obstacle";
+        
+        // Apply scale
+        obstacle.transform.localScale = config.scale;
+        
+        // Add collider if missing
+        if (obstacle.GetComponent<Collider>() == null)
+        {
+            BoxCollider boxCollider = obstacle.AddComponent<BoxCollider>();
+            boxCollider.isTrigger = true;
+        }
+        
+        // Add urban obstacle component if missing
+        UrbanObstacle urbanObstacleComponent = obstacle.GetComponent<UrbanObstacle>();
+        if (urbanObstacleComponent == null)
+        {
+            urbanObstacleComponent = obstacle.AddComponent<UrbanObstacle>();
+        }
+        
+        // Configure the urban obstacle
+        urbanObstacleComponent.urbanType = config.urbanType;
+        urbanObstacleComponent.movementPattern = config.movementPattern;
+        urbanObstacleComponent.collisionBehavior = config.collisionBehavior;
+        
+        // Add movement component for dynamic obstacles
+        if (config.movementPattern != MovementPattern.Static)
+        {
+            ObstacleMovement movementComponent = obstacle.GetComponent<ObstacleMovement>();
+            if (movementComponent == null)
+            {
+                movementComponent = obstacle.AddComponent<ObstacleMovement>();
+            }
+            ConfigureMovementComponent(movementComponent, config);
+        }
+        
+        // Add effects component
+        ObstacleEffects effectsComponent = obstacle.GetComponent<ObstacleEffects>();
+        if (effectsComponent == null)
+        {
+            effectsComponent = obstacle.AddComponent<ObstacleEffects>();
+        }
+    }
+    
+    void ConfigureMovementComponent(ObstacleMovement movement, UrbanObstacleConfiguration config)
+    {
+        switch (config.movementPattern)
+        {
+            case MovementPattern.CrossingLanes:
+                movement.movementType = MovementType.Linear;
+                movement.direction = Vector3.right;
+                movement.speed = 3f;
+                movement.destroyOnReachEnd = true;
+                movement.crossLanes = true;
+                break;
+                
+            case MovementPattern.Patrol:
+                movement.movementType = MovementType.Linear;
+                movement.direction = Vector3.right;
+                movement.speed = 1.5f;
+                movement.loopMovement = true;
+                movement.destroyOnReachEnd = false;
+                break;
+                
+            case MovementPattern.Rolling:
+                // Rolling obstacles use physics, configured in UrbanObstacle
+                movement.enabled = false;
+                break;
+        }
+    }
+    
+    void CreateDefaultUrbanObstacle(Vector3 position, UrbanObstacleConfiguration config)
+    {
+        GameObject obstacle = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        obstacle.transform.position = position;
+        obstacle.transform.localScale = config.scale;
+        
+        SetupUrbanObstacle(obstacle, config);
+    }
+    
     void ScheduleNextSpawn()
     {
         float randomizedInterval = Random.Range(currentSpawnInterval * 0.8f, currentSpawnInterval * 1.2f);
@@ -260,6 +466,138 @@ public class ObstacleSpawner : MonoBehaviour
                 spawnWeight = 0.2f, 
                 canBeDestroyed = true, 
                 height = 2f 
+            }
+        };
+    }
+    
+    void CreateDefaultUrbanObstacleTypes()
+    {
+        urbanObstacleTypes = new UrbanObstacleConfiguration[]
+        {
+            // Static Urban Obstacles
+            new UrbanObstacleConfiguration
+            {
+                name = "Plastic Trash Bin",
+                urbanType = UrbanObstacleType.TrashBin,
+                spawnWeight = 3f,
+                scale = new Vector3(0.8f, 1f, 0.8f),
+                movementPattern = MovementPattern.Static,
+                collisionBehavior = CollisionBehavior.Destroyable,
+                minDifficultyLevel = 0
+            },
+            new UrbanObstacleConfiguration
+            {
+                name = "Metal Trash Bin",
+                urbanType = UrbanObstacleType.TrashBin,
+                spawnWeight = 2f,
+                scale = new Vector3(0.9f, 1.2f, 0.9f),
+                movementPattern = MovementPattern.Static,
+                collisionBehavior = CollisionBehavior.Destroyable,
+                minDifficultyLevel = 1
+            },
+            new UrbanObstacleConfiguration
+            {
+                name = "Street Sign",
+                urbanType = UrbanObstacleType.StreetSign,
+                spawnWeight = 2.5f,
+                scale = new Vector3(0.3f, 1.5f, 0.3f),
+                movementPattern = MovementPattern.Wobbling,
+                collisionBehavior = CollisionBehavior.Destroyable,
+                minDifficultyLevel = 0
+            },
+            new UrbanObstacleConfiguration
+            {
+                name = "Vendor Cart",
+                urbanType = UrbanObstacleType.VendorCart,
+                spawnWeight = 1.5f,
+                scale = new Vector3(1.2f, 0.8f, 2f),
+                movementPattern = MovementPattern.Static,
+                collisionBehavior = CollisionBehavior.Destroyable,
+                minDifficultyLevel = 0
+            },
+            new UrbanObstacleConfiguration
+            {
+                name = "Fire Hydrant",
+                urbanType = UrbanObstacleType.FireHydrant,
+                spawnWeight = 1f,
+                scale = new Vector3(0.6f, 1f, 0.6f),
+                movementPattern = MovementPattern.Static,
+                collisionBehavior = CollisionBehavior.Destroyable,
+                minDifficultyLevel = 1
+            },
+            new UrbanObstacleConfiguration
+            {
+                name = "Parked Car",
+                urbanType = UrbanObstacleType.ParkedCar,
+                spawnWeight = 0.8f,
+                scale = new Vector3(1.8f, 1.2f, 4f),
+                movementPattern = MovementPattern.Static,
+                collisionBehavior = CollisionBehavior.Indestructible,
+                preferredLane = true,
+                allowedLanes = new int[] { 0, 2 }, // Side lanes only
+                minDifficultyLevel = 2
+            },
+            new UrbanObstacleConfiguration
+            {
+                name = "Flower Pot",
+                urbanType = UrbanObstacleType.FlowerPot,
+                spawnWeight = 2f,
+                scale = new Vector3(0.5f, 0.6f, 0.5f),
+                movementPattern = MovementPattern.Static,
+                collisionBehavior = CollisionBehavior.Destroyable,
+                minDifficultyLevel = 0
+            },
+            
+            // Dynamic Urban Obstacles
+            new UrbanObstacleConfiguration
+            {
+                name = "Delivery Scooter",
+                urbanType = UrbanObstacleType.DeliveryScooter,
+                spawnWeight = 1f,
+                scale = new Vector3(0.8f, 1.2f, 1.5f),
+                movementPattern = MovementPattern.CrossingLanes,
+                collisionBehavior = CollisionBehavior.Avoidable,
+                minDifficultyLevel = 1
+            },
+            new UrbanObstacleConfiguration
+            {
+                name = "Stray Cat",
+                urbanType = UrbanObstacleType.StrayCat,
+                spawnWeight = 1.5f,
+                scale = new Vector3(0.4f, 0.3f, 0.7f),
+                movementPattern = MovementPattern.Patrol,
+                collisionBehavior = CollisionBehavior.Avoidable,
+                minDifficultyLevel = 0
+            },
+            new UrbanObstacleConfiguration
+            {
+                name = "Shopping Cart",
+                urbanType = UrbanObstacleType.ShoppingCart,
+                spawnWeight = 1.2f,
+                scale = new Vector3(0.8f, 1f, 1.2f),
+                movementPattern = MovementPattern.Rolling,
+                collisionBehavior = CollisionBehavior.Destroyable,
+                minDifficultyLevel = 1
+            },
+            new UrbanObstacleConfiguration
+            {
+                name = "Skateboarder",
+                urbanType = UrbanObstacleType.Skateboarder,
+                spawnWeight = 0.8f,
+                scale = new Vector3(0.6f, 1.7f, 0.3f),
+                movementPattern = MovementPattern.CrossingLanes,
+                collisionBehavior = CollisionBehavior.Avoidable,
+                minDifficultyLevel = 2
+            },
+            new UrbanObstacleConfiguration
+            {
+                name = "Pigeons",
+                urbanType = UrbanObstacleType.Pigeon,
+                spawnWeight = 1f,
+                scale = new Vector3(0.3f, 0.2f, 0.3f),
+                movementPattern = MovementPattern.Flying,
+                collisionBehavior = CollisionBehavior.Avoidable,
+                minDifficultyLevel = 0
             }
         };
     }

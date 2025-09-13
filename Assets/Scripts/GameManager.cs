@@ -53,14 +53,17 @@ public class GameManager : MonoBehaviour
     {
         if (IsGameActive)
         {
-            UpdateGameSpeed();
+            // Keep speed constant - no longer increases over time
+            // UpdateGameSpeed(); // Disabled - player maintains constant speed
             gameTime += Time.deltaTime;
         }
     }
     
     void UpdateGameSpeed()
     {
-        CurrentSpeed = Mathf.Min(baseSpeed + (gameTime * speedIncreaseRate), maxSpeed);
+        // Speed no longer increases - stays at base speed
+        CurrentSpeed = baseSpeed;
+        // Old dynamic speed: CurrentSpeed = Mathf.Min(baseSpeed + (gameTime * speedIncreaseRate), maxSpeed);
     }
     
     public void StartGame()

@@ -5,14 +5,21 @@ public class ShootingSystem : MonoBehaviour
     [Header("Shooting Settings")]
     public GameObject ballPrefab;
     public Transform shootPoint;
-    public float ballSpeed = 15f;
-    public float ballLifetime = 5f; // Increased for boomerang return
-    public float chargedShotMultiplier = 2f;
+    public float ballSpeed = 30f; // Match Ball.cs launchForce
+    public float ballLifetime = 5f;
+    public float chargedShotMultiplier = 1.5f; // 45 speed for charged shots
     public float autoTargetRange = 10f;
     public LayerMask obstacleLayer = 1;
     
+    [Header("Trajectory Preview")]
+    public bool showTrajectoryPreview = true;
+    public LineRenderer trajectoryLine;
+    public int trajectoryPoints = 50;
+    public float trajectoryTimeStep = 0.1f;
+    public Material trajectoryMaterial;
+    
     [Header("Charged Shot")]
-    public float chargedShotForce = 25f;
+    public float chargedShotForce = 45f; // 3x player max speed
     public float chargedShotRadius = 2f;
     public int maxChargedTargets = 3;
     
@@ -30,14 +37,17 @@ public class ShootingSystem : MonoBehaviour
             Debug.LogError("ShootingSystem: PlayerController non trouvé!");
         }
         
-        // If no shoot point is assigned, create one in front of player
+        // If no shoot point is assigned, create one at player's feet
         if (shootPoint == null)
         {
             GameObject shootPointObj = new GameObject("ShootPoint");
             shootPointObj.transform.SetParent(transform);
-            shootPointObj.transform.localPosition = new Vector3(0, 1f, 1f); // Further in front
+            shootPointObj.transform.localPosition = new Vector3(0, -0.5f, 1f); // At foot level
             shootPoint = shootPointObj.transform;
         }
+        
+        // Setup trajectory preview
+        SetupTrajectoryPreview();
     }
     
     public void QuickShot()
@@ -86,8 +96,8 @@ public class ShootingSystem : MonoBehaviour
     
     void CreateBall(Vector3 direction, float speed, bool isChargedShot)
     {
-        // Ensure ball spawns in front of player
-        Vector3 spawnPosition = transform.position + transform.forward * 1.5f + Vector3.up * 1f;
+        // Spawn ball at player's feet (ground level) in front
+        Vector3 spawnPosition = transform.position + transform.forward * 1.5f - Vector3.up * 0.5f;
         GameObject ball = Instantiate(ballPrefab, spawnPosition, Quaternion.LookRotation(direction));
         
         // Ensure ball is visible
@@ -197,6 +207,95 @@ public class ShootingSystem : MonoBehaviour
         });
         
         return validTargets.ToArray();
+    }
+    
+    void SetupTrajectoryPreview()
+    {
+        if (trajectoryLine == null)
+        {
+            GameObject trajectoryObj = new GameObject("TrajectoryPreview");
+            trajectoryObj.transform.SetParent(transform);
+            trajectoryLine = trajectoryObj.AddComponent<LineRenderer>();
+        }
+        
+        trajectoryLine.positionCount = trajectoryPoints;
+        trajectoryLine.startWidth = 0.05f;
+        trajectoryLine.endWidth = 0.02f;
+        trajectoryLine.useWorldSpace = true;
+        trajectoryLine.enabled = false;
+        
+        // Create trajectory material if not assigned
+        if (trajectoryMaterial == null)
+        {
+            trajectoryMaterial = new Material(Shader.Find("Sprites/Default"));
+            trajectoryMaterial.color = new Color(1f, 1f, 0f, 0.7f); // Semi-transparent yellow
+        }
+        
+        trajectoryLine.material = trajectoryMaterial;
+    }
+    
+    public void ShowTrajectoryPreview(bool isCharged = false)
+    {
+        if (!showTrajectoryPreview || trajectoryLine == null) return;
+        
+        Vector3 startPos = shootPoint.position;
+        Vector3 direction = transform.forward;
+        float force = isCharged ? chargedShotForce : ballSpeed;
+        
+        // Calculate trajectory points
+        Vector3[] points = new Vector3[trajectoryPoints];
+        for (int i = 0; i < trajectoryPoints; i++)
+        {
+            float time = i * trajectoryTimeStep;
+            points[i] = CalculateTrajectoryPoint(startPos, direction, force, time);
+            
+            // Stop at obstacles
+            if (CheckTrajectoryCollision(points[i]))
+            {
+                // Truncate trajectory at collision point
+                System.Array.Resize(ref points, i + 1);
+                trajectoryLine.positionCount = i + 1;
+                break;
+            }
+        }
+        
+        trajectoryLine.SetPositions(points);
+        trajectoryLine.enabled = true;
+    }
+    
+    public void HideTrajectoryPreview()
+    {
+        if (trajectoryLine != null)
+        {
+            trajectoryLine.enabled = false;
+        }
+    }
+    
+    Vector3 CalculateTrajectoryPoint(Vector3 startPos, Vector3 direction, float force, float time)
+    {
+        // Simple ballistic trajectory (no gravity for now since balls don't use gravity)
+        return startPos + direction * force * time;
+    }
+    
+    bool CheckTrajectoryCollision(Vector3 point)
+    {
+        // Check if trajectory point hits an obstacle
+        Collider[] hits = Physics.OverlapSphere(point, 0.2f, obstacleLayer);
+        return hits.Length > 0;
+    }
+    
+    void Update()
+    {
+        // Update trajectory preview when aiming (could be triggered by input)
+        if (showTrajectoryPreview && activeBall == null)
+        {
+            // Show preview when not shooting
+            ShowTrajectoryPreview(false);
+        }
+        else
+        {
+            HideTrajectoryPreview();
+        }
     }
     
     void OnDrawGizmosSelected()
